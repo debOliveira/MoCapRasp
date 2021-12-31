@@ -4,7 +4,7 @@ import picamera
 import os
 import pandas as pd
 
-os.system('clear')
+#os.system('clear')
 os.system('rm -rf pics/*')
 
 trigger = 10**9 #miliseconds
