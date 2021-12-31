@@ -14,9 +14,10 @@ serverAdressPort = ("192.168.1.104", 8888)
 bufferSize = 1024
 UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 df = pd.DataFrame(columns=['timestamp(microsec)','image'])
+vs = PiVideoStream(resolution=(640,480), framerate=70,).start()
 
 print("[INFO] setting up camera")
-with PiVideoStream(resolution=(640,480), framerate=70,).start() as camera:
+with vs as camera:
     # Give the camera some warm-up time
     time.sleep(2)
     

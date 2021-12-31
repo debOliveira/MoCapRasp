@@ -23,9 +23,10 @@ UDPServerSocket.bind((localIp,localPort))
 print("[INFO] server running...")
 
 df = pd.DataFrame(columns=['timestamp(microsec)','image'])
+vs = PiVideoStream(resolution=(640,480), framerate=70,).start()
 
 print("[INFO] setting up camera")
-with PiVideoStream(resolution=(640,480), framerate=70,).start() as camera:
+with vs as camera:
     # Give the camera some warm-up time
     time.sleep(2)
     
