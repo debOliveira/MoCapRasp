@@ -6,12 +6,12 @@ import os
 import pandas as pd
 import numpy as np
 
-os.system('clear')
+#os.system('clear')
 os.system('rm -rf pics/*')
 
 trigger = 10**9 #miliseconds
-frameTotal = 180
-interval = 10**7 #miliseconds
+frameTotal = 120
+interval = 16666666 #miliseconds
 count = 0
 print('[INFO] set trigger to '+ str(trigger/(10**9)) + 's '+ 'and recording time to '+ str(frameTotal) + ' frames')
             
@@ -43,7 +43,8 @@ while (now - timeBase) < (trigger):
     now = time.time_ns()
 print('[RESULTS] waited '+ str((now - timeBase)/(10**9)) + 's')
 print('[RESULTS] trigger at timestamp ' +str(now/(10**9)))
-   
+timeBase+=trigger
+
 print('[RECORDING]')
 start = time.time()
 while count < frameTotal:
@@ -51,6 +52,7 @@ while count < frameTotal:
         now = time.time_ns()
     frame = camera.read()
     df.loc[len(df.index)] = [now,frame,(now-timeBase)/(10**9)]
+    #print((now-timeBase)/(10**9))
     timeBase += interval
     count += 1
 finish = time.time()
