@@ -9,10 +9,7 @@ os.system('rm -rf pics/*')
 
 trigger = 10**9 #miliseconds
 recTime = 2
-print('[INFO] set trigger to '+
-      str(trigger/(10**9)) + 's '+
-      'and recording time to '+
-      str(recTime) + 's')
+print('[INFO] set trigger to '+ str(trigger/(10**9)) + 's '+ 'and recording time to '+ str(recTime) + 's')
 
 class SplitFrames(object):
     def __init__(self):
@@ -57,9 +54,7 @@ with picamera.PiCamera(resolution=(640,480), framerate=70,
     timeBase = time.time_ns()
     output.tb = timeBase
     print(str(adress) + ' >> '+ str(int(timeBase)/(10**9)))
-    UDPServerSocket.sendto(str.encode(str(timeBase)+
-                                      ' '+str(trigger)+
-                                      ' '+str(recTime)),adress)
+    UDPServerSocket.sendto(str.encode(str(timeBase)+' '+str(trigger)+' '+str(recTime)),adress)
     
     print("[INFO] waiting trigger")
     now = time.time_ns()

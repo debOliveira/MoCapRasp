@@ -7,13 +7,6 @@ import pandas as pd
 os.system('clear')
 os.system('rm -rf pics/*')
 
-trigger = 10**9 #miliseconds
-recTime = 2
-print('[INFO] set trigger to '+
-      str(trigger/(10**9)) + 's '+
-      'and recording time to '+
-      str(recTime) + 's')
-
 class SplitFrames(object):
     def __init__(self):
         self.frame_num = 0
@@ -48,7 +41,7 @@ with picamera.PiCamera(resolution=(640,480), framerate=70,
     camera.awb_gains = 0.9
     output = SplitFrames()
     
-    print("[INFO] waiting for client")
+    print("[INFO] triggering server")
     UDPClientSocket.sendto(str.encode("on"),serverAdressPort)
     msgFromServer = UDPClientSocket.recvfrom(bufferSize)
     data = msgFromServer[0].split()
@@ -57,7 +50,7 @@ with picamera.PiCamera(resolution=(640,480), framerate=70,
     recTime = int(data[2])
     
     
-    print("[INFO] waiting trigger")
+    print("[INFO] waiting camera trigger")
     now = time.time_ns()
     while (now - timeBase) < (trigger):
         now = time.time_ns()
