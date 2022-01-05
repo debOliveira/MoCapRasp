@@ -25,8 +25,7 @@ class SplitFrames(object):
             if self.output:
                 self.output.close()
             self.frame_num += 1
-            ts = time.time_ns()
-            self.output = io.open('pics/image%05d_%d.bmp' % (self.frame_num,ts), 'wb')
+            self.output = io.open('pics/image%05d.bmp' % self.frame_num, 'wb')
             self.df.loc[len(self.df.index)] = [time.time_ns()]
         self.output.write(buf)
     
@@ -39,14 +38,15 @@ UDPServerSocket.bind((localIp,localPort))
 print("[INFO] server running...")
 
 print("[INFO] setting up camera")
-with picamera.PiCamera(resolution=(640,480), framerate=70,
+with picamera.PiCamera(resolution=(640,480), framerate=50,
                        sensor_mode=7) as camera:
     # Give the camera some warm-up time
-    time.sleep(2)
+    time.sleep(5)
     camera.shutter_speed = camera.exposure_speed
     camera.exposure_mode = 'off'
+    g = camera.awb_gains
     camera.awb_mode = 'off'
-    camera.awb_gains = 0.9
+    camera.awb_gains = g
     output = SplitFrames()
     
     print("[INFO] waiting for client")
