@@ -10,8 +10,7 @@ camera.framerate = 30
 camera.sensor_mode = 7
 camera.start_preview()
 # allow the camera to warmup
-print('sleeping...')
-time.sleep(5)
+sleep(5)
 print('awake')
 camera.exposure_mode = 'off'
 g = camera.awb_gains
