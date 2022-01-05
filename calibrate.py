@@ -4,6 +4,7 @@ import os
 
 os.system('rm -rf calibPics/*')
 
+camera = PiCamera()
 camera.resolution = (640, 480)
 camera.framerate = 30
 camera.sensor_mode = 7
