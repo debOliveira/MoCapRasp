@@ -7,16 +7,14 @@ import pandas as pd
 #os.system('clear')
 os.system('rm -rf pics/*')
 
-trigger = 10*(10**9) #miliseconds
-recTime = 20
+trigger = 10**9 #miliseconds
+recTime = 2
 print('[INFO] set trigger to '+ str(trigger/(10**9)) + 's '+ 'and recording time to '+ str(recTime) + 's')
 
 class SplitFrames(object):
     def __init__(self):
         self.frame_num = 0
         self.output = None
-        self.df = pd.DataFrame(columns=['timestamp(microsec)'])
-        self.tb = 0
 
     def write(self, buf):
         if buf.startswith(b'\xff\xd8'):
@@ -25,8 +23,7 @@ class SplitFrames(object):
             if self.output:
                 self.output.close()
             self.frame_num += 1
-            self.output = io.open('pics/image%05d.jpg' % self.frame_num, 'wb')
-            self.df.loc[len(self.df.index)] = [time.time_ns()]
+            self.output = io.open('bg.jpg', 'wb')
         self.output.write(buf)
     
             
@@ -75,6 +72,3 @@ print('[RESULTS] trigger at timestamp ' +str(now/(10**9)))
 print('[RESULTS] captured %d frames at %.2ffps' % (
     output.frame_num,
     output.frame_num / (finish - start)))
-output.df.loc[len(output.df.index)] = [output.tb]
-output.df.to_csv('results.csv', index = False)
-print('[RESULTS] csv exported with '+str(len(output.df.index))+' lines')
