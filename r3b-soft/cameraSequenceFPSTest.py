@@ -26,19 +26,20 @@ class SplitFrames(object):
         self.output.write(buf)
     
             
-serverAdressPort = ("192.168.1.104", 8888)
+serverAdressPort = ("192.168.0.103", 8888)
 bufferSize = 1024
 UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 
 print("[INFO] setting up camera")
-with picamera.PiCamera(resolution=(640,480), framerate=70,
+with picamera.PiCamera(resolution=(640,480), framerate=50,
                        sensor_mode=7) as camera:
     # Give the camera some warm-up time
-    time.sleep(2)
+    time.sleep(5)
     camera.shutter_speed = camera.exposure_speed
     camera.exposure_mode = 'off'
+    g = camera.awb_gains
     camera.awb_mode = 'off'
-    camera.awb_gains = 0.9
+    camera.awb_gains = g
     output = SplitFrames()
     
     print("[INFO] triggering server")
