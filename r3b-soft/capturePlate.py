@@ -11,8 +11,6 @@ class SplitFrames(object):
     def __init__(self):
         self.frame_num = 0
         self.output = None
-        self.df = pd.DataFrame(columns=['timestamp(microsec)'])
-        self.tb = 0
 
     def write(self, buf):
         if buf.startswith(b'\xff\xd8'):
@@ -21,8 +19,7 @@ class SplitFrames(object):
             if self.output:
                 self.output.close()
             self.frame_num += 1
-            self.output = io.open('pics/image%05d.jpg' % self.frame_num, 'wb')
-            self.df.loc[len(self.df.index)] = [time.time_ns()]
+            self.output = io.open('bg.jpg', 'wb')
         self.output.write(buf)
     
             
@@ -69,6 +66,4 @@ print('[RESULTS] trigger at timestamp ' +str(now/(10**9)))
 print('[RESULTS] captured %d frames at %.2ffps' % (
     output.frame_num,
     output.frame_num / (finish - start)))
-output.df.loc[len(output.df.index)] = [output.tb]
-output.df.to_csv('results.csv', index = False)
-print('[RESULTS] csv exported with '+str(len(output.df.index))+' lines')
+
