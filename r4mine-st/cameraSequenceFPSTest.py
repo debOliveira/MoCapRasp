@@ -25,12 +25,13 @@ class SplitFrames(object):
             if self.output:
                 self.output.close()
             self.frame_num += 1
-            self.output = io.open('pics/image%05d.bmp' % self.frame_num, 'wb')
+            ts = time.time_ns()
+            self.output = io.open('pics/image%05d_%d.bmp' % (self.frame_num,ts), 'wb')
             self.df.loc[len(self.df.index)] = [time.time_ns()]
         self.output.write(buf)
     
             
-localIp = "192.168.1.104"
+localIp = "192.168.0.103"
 localPort = 8888
 bufferSize = 1024
 UDPServerSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
