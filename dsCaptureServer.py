@@ -2,15 +2,17 @@ import io,socket
 import time
 import picamera
 import os
+import pandas as pd
 os.system('rm -rf pics/*')
 
-trigger = 100*(10**9) #miliseconds
-recTime = 2
+trigger = 5*(10**9) #miliseconds
+recTime = 125
 print('[INFO] set trigger to '+ str(trigger/(10**9)) + 's '+ 'and recording time to '+ str(recTime) + 's')
 
 class SplitFrames(object):
     def __init__(self):
         self.frame_num = 0
+        self.df = pd.DataFrame(columns=['timestamp(microsec)'])
         self.output = None
 
     def write(self, buf):
@@ -21,6 +23,7 @@ class SplitFrames(object):
                 self.output.close()
             self.frame_num += 1
             self.output = io.open('pics/image%04d.jpg' % self.frame_num, 'wb')
+            self.df.loc[len(self.df.index)] = [time.time_ns()]
         self.output.write(buf)
         
 localIp = "192.168.0.103"
@@ -67,3 +70,5 @@ with picamera.PiCamera(resolution=(640,480), framerate=40,
 print('Captured %d frames at %.2ffps' % (
     output.frame_num,
     output.frame_num / (finish - start)))
+output.df.to_csv('results.csv', index = False)
+print('[RESULTS] csv exported with '+str(len(output.df.index))+' lines')
