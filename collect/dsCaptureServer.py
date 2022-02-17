@@ -65,7 +65,7 @@ try:
         adress = bytesPair[1]
         timeBase = time.time_ns()
         output.tb = timeBase
-        print(str(adress) + ' >> '+ str(int(timeBase)/(10**9)))
+        #print(str(adress) + ' >> '+ str(int(timeBase)/(10**9)))
         UDPServerSocket.sendto(str.encode(str(timeBase)+' '+str(trigger)+' '+str(recTime)),adress)
 
         os.system('sudo kill -9 '+pid)
