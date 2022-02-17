@@ -37,7 +37,7 @@ bufferSize = 1024
 UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 
 client_socket = socket.socket()
-client_socket.connect(('192.168.0.103', 8001))
+client_socket.connect(('192.168.0.103', 8000))
 connection = client_socket.makefile('wb')
 print("[INFO] connected to central...")
 
