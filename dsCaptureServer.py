@@ -1,4 +1,6 @@
-import io,socket
+import io
+import socket
+import struct
 import time
 import picamera
 import os
@@ -14,69 +16,82 @@ recTime = 30
 print('[INFO] set trigger to '+ str(trigger/(10**9)) + 's '+ 'and recording time to '+ str(recTime) + 's')
 
 class SplitFrames(object):
-    def __init__(self):
-        self.frame_num = 0
-        self.df = pd.DataFrame(columns=['timestamp(microsec)'])
-        self.output = None
+    def __init__(self, connection):
+        self.connection = connection
+        self.df = pd.DataFrame(columns=['ts'])
+        self.stream = io.BytesIO()
+        self.count = 0
 
     def write(self, buf):
         if buf.startswith(b'\xff\xd8'):
-            # Start of new frame; close the old one (if any) and
-            # open a new output
-            if self.output:
-                self.output.close()
-            self.frame_num += 1
-            self.output = io.open('pics/image%04d.jpg' % self.frame_num, 'wb')
-            self.df.loc[len(self.df.index)] = [time.time_ns()]
-        self.output.write(buf)
-        
-localIp = "192.168.0.103"
-localPort = 8888
-bufferSize = 1024
-UDPServerSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-UDPServerSocket.bind((localIp,localPort))
-print("[INFO] server running...")
+            # Start of new frame; send the old one's length
+            # then the data
+            size = self.stream.tell()
+            if size > 0:
+                self.connection.write(struct.pack('<L', size))
+                self.connection.flush()
+                self.stream.seek(0)
+                self.connection.write(self.stream.read(size))
+                self.df.loc[len(self.df.index)] = [time.time_ns()]
+                self.count += 1
+                self.stream.seek(0)
+        self.stream.write(buf)
 
-with picamera.PiCamera(resolution=(640,480), framerate=40,
+''''bufferSize = 1024
+UDPServerSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+UDPServerSocket.bind(('192.168.0.102',8888))
+print("[INFO] server running...")''''
+
+client_socket = socket.socket()
+client_socket.connect(('192.168.0.103', 8000))
+connection = client_socket.makefile('wb')
+print("[INFO] connected to central...")
+
+try:
+    with picamera.PiCamera(resolution=(640,480), framerate=40,
                        sensor_mode=4) as camera:
-    camera.start_preview(fullscreen=False,window=(100,100,640,480))
-    print("[INFO] setting up camera")
-    # Give the camera some warm-up time
-    time.sleep(5)
-    camera.shutter_speed = camera.exposure_speed
-    camera.exposure_mode = 'off'
-    camera.color_effects = (128,128)
-    g = camera.awb_gains
-    camera.awb_mode = 'off'
-    camera.awb_gains = g
-    output = SplitFrames()
-    
-    print("[INFO] waiting for client")
-    bytesPair = UDPServerSocket.recvfrom(bufferSize)
-    adress = bytesPair[1]
-    timeBase = time.time_ns()
-    output.tb = timeBase
-    print(str(adress) + ' >> '+ str(int(timeBase)/(10**9)))
-    UDPServerSocket.sendto(str.encode(str(timeBase)+' '+str(trigger)+' '+str(recTime)),adress)
-    
-    os.system('sudo kill -9 '+pid)
-    print('[INFO] killed PTPD process')
-    
-    print("[INFO] waiting trigger")
-    now = time.time_ns()
-    while (now - timeBase) < (trigger):
+        camera.start_preview(fullscreen=False,window=(100,100,640,480))
+        print("[INFO] setting up camera")
+        time.sleep(5)
+        camera.shutter_speed = camera.exposure_speed
+        camera.exposure_mode = 'off'
+        camera.color_effects = (128,128)
+        g = camera.awb_gains
+        camera.awb_mode = 'off'
+        camera.awb_gains = g
+        output = SplitFrames(connection)
+        
+        '''print("[INFO] waiting for client")
+        bytesPair = UDPServerSocket.recvfrom(bufferSize)
+        adress = bytesPair[1]
+        timeBase = time.time_ns()
+        output.tb = timeBase
+        print(str(adress) + ' >> '+ str(int(timeBase)/(10**9)))
+        UDPServerSocket.sendto(str.encode(str(timeBase)+' '+str(trigger)+' '+str(recTime)),adress)'''
+
+        os.system('sudo kill -9 '+pid)
+        print('[INFO] killed PTPD process')
+        
+        '''print("[INFO] waiting trigger")
         now = time.time_ns()
-    
-    print('[RECORDING..]')
-    start = time.time()
-    camera.start_recording(output, format='mjpeg')
-    camera.wait_recording(recTime)
-    camera.stop_recording()
+        while (now - timeBase) < (trigger):
+            now = time.time_ns()'''
+        
+        print('[RECORDING..]')
+
+        start = time.time()
+        camera.start_recording(output, format='mjpeg')
+        camera.wait_recording(recTime)
+        camera.stop_recording()
+        # Write the terminating 0-length to the connection to let the
+        # server know we're done
+        connection.write(struct.pack('<L', 0))
+finally:
+    connection.close()
+    client_socket.close()
     finish = time.time()
-    
-print('Captured %d frames at %.2ffps' % (
-    output.frame_num,
-    output.frame_num / (finish - start)))
+print('Sent %d images in %d seconds at %.2ffps' % (
+    output.count, finish-start, output.count / (finish-start)))
 output.df.to_csv('results.csv', index = False)
 print('[RESULTS] csv exported with '+str(len(output.df.index))+' lines')
 os.system('sudo ptpd -s -i eth0')
