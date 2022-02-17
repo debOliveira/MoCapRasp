@@ -3,6 +3,10 @@ import time
 import picamera
 import os
 import pandas as pd
+import subprocess
+
+var = subprocess.check_output('pgrep ptpd', shell=True)
+pid = var.decode("utf-8")
 os.system('rm -rf pics/*')
 
 class SplitFrames(object):
@@ -47,6 +51,9 @@ with picamera.PiCamera(resolution=(640,480), framerate=40,
     timeBase = int(data[0])
     trigger = int(data[1])
     recTime = int(data[2])
+    
+    os.system('sudo kill -9 '+pid)
+    print('[INFO] killed PTPD process')
         
     print("[INFO] waiting camera trigger")
     now = time.time_ns()
@@ -65,3 +72,5 @@ print('Captured %d frames at %.2ffps' % (
     output.frame_num / (finish - start)))
 output.df.to_csv('results.csv', index = False)
 print('[RESULTS] csv exported with '+str(len(output.df.index))+' lines')
+os.system('sudo ptpd -s -i eth0')
+print('[INFO] PTPD running')
