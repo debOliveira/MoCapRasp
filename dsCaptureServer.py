@@ -9,7 +9,7 @@ import subprocess
 
 var = subprocess.check_output('pgrep ptpd', shell=True)
 pid = var.decode("utf-8")
-os.system('rm -rf pics/*')
+os.system('rm -rf results_2.csv')
 
 trigger = 5*(10**9) #miliseconds
 recTime = 30
@@ -37,13 +37,13 @@ class SplitFrames(object):
                 self.stream.seek(0)
         self.stream.write(buf)
 
-''''bufferSize = 1024
+'''bufferSize = 1024
 UDPServerSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 UDPServerSocket.bind(('192.168.0.102',8888))
-print("[INFO] server running...")''''
+print("[INFO] server running...")'''
 
 client_socket = socket.socket()
-client_socket.connect(('192.168.0.103', 8000))
+client_socket.connect(('192.168.0.103', 8001))
 connection = client_socket.makefile('wb')
 print("[INFO] connected to central...")
 
@@ -83,6 +83,7 @@ try:
         camera.start_recording(output, format='mjpeg')
         camera.wait_recording(recTime)
         camera.stop_recording()
+        finish = time.time()
         # Write the terminating 0-length to the connection to let the
         # server know we're done
         connection.write(struct.pack('<L', 0))
@@ -92,7 +93,10 @@ finally:
     finish = time.time()
 print('Sent %d images in %d seconds at %.2ffps' % (
     output.count, finish-start, output.count / (finish-start)))
-output.df.to_csv('results.csv', index = False)
+output.df.to_csv('results_2.csv', index = False)
 print('[RESULTS] csv exported with '+str(len(output.df.index))+' lines')
 os.system('sudo ptpd -s -i eth0')
 print('[INFO] PTPD running')
+os.system('sshpass -p "debora123#" scp  results_2.csv debora@192.168.0.103:~/Desktop/collectDataset')
+print('[INFO] csv sent to central')
+os.system('rm -rf results_2.csv')
