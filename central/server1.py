@@ -5,9 +5,9 @@ from PIL import Image
 
 # Start a socket listening for connections on 0.0.0.0:8000 (0.0.0.0 means
 # all interfaces)
-print('[INFO] starting server')
+print('[INFO] starting server 1')
 server_socket = socket.socket()
-server_socket.bind(('0.0.0.0', 8001))
+server_socket.bind(('0.0.0.0', 8000))
 server_socket.listen(0)
 count = 0
 
@@ -30,7 +30,7 @@ try:
         image_stream.seek(0)
         image = Image.open(image_stream)
         #print('Image is %dx%d' % image.size)
-        image.save('pics2/'+str(count).zfill(4)+'.jpg')
+        image.save('../results/pics1/'+str(count).zfill(4)+'.jpg')
         #image.verify()
         #print('Image is verified')
         count+=1

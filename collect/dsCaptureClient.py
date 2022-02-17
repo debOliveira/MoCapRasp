@@ -7,28 +7,37 @@ import subprocess
 
 var = subprocess.check_output('pgrep ptpd', shell=True)
 pid = var.decode("utf-8")
-os.system('rm -rf pics/*')
 
 class SplitFrames(object):
-    def __init__(self):
-        self.frame_num = 0
-        self.df = pd.DataFrame(columns=['timestamp(microsec)'])
-        self.output = None
+    def __init__(self, connection):
+        self.connection = connection
+        self.df = pd.DataFrame(columns=['ts'])
+        self.stream = io.BytesIO()
+        self.count = 0
 
     def write(self, buf):
         if buf.startswith(b'\xff\xd8'):
-            # Start of new frame; close the old one (if any) and
-            # open a new output
-            if self.output:
-                self.output.close()
-            self.frame_num += 1
-            self.output = io.open('pics/image%04d.jpg' % self.frame_num, 'wb')
-            self.df.loc[len(self.df.index)] = [time.time_ns()]            
-        self.output.write(buf)
-        
-serverAdressPort = ("192.168.0.103", 8888)
+            # Start of new frame; send the old one's length
+            # then the data
+            size = self.stream.tell()
+            if size > 0:
+                self.connection.write(struct.pack('<L', size))
+                self.connection.flush()
+                self.stream.seek(0)
+                self.connection.write(self.stream.read(size))
+                self.df.loc[len(self.df.index)] = [time.time_ns()]
+                self.count += 1
+                self.stream.seek(0)
+        self.stream.write(buf)
+
+serverAdressPort = ("192.168.0.102", 8888)
 bufferSize = 1024
 UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+
+client_socket = socket.socket()
+client_socket.connect(('192.168.0.103', 8000))
+connection = client_socket.makefile('wb')
+print("[INFO] connected to central...")
 
 with picamera.PiCamera(resolution=(640,480), framerate=40,
                        sensor_mode=4) as camera:
@@ -42,7 +51,7 @@ with picamera.PiCamera(resolution=(640,480), framerate=40,
     g = camera.awb_gains
     camera.awb_mode = 'off'
     camera.awb_gains = g
-    output = SplitFrames()
+    output = SplitFrames(connection)
     
     print("[INFO] triggering server")
     UDPClientSocket.sendto(str.encode("on"),serverAdressPort)
@@ -70,7 +79,10 @@ with picamera.PiCamera(resolution=(640,480), framerate=40,
 print('Captured %d frames at %.2ffps' % (
     output.frame_num,
     output.frame_num / (finish - start)))
-output.df.to_csv('results.csv', index = False)
+output.df.to_csv('results_1.csv', index = False)
 print('[RESULTS] csv exported with '+str(len(output.df.index))+' lines')
 os.system('sudo ptpd -s -i eth0')
 print('[INFO] PTPD running')
+os.system('sshpass -p "debora123#" scp  results_1.csv debora@192.168.0.103:~/Desktop/MoCapRasps/results')
+print('[INFO] csv sent to central')
+os.system('rm -rf results_1.csv')
