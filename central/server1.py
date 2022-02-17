@@ -30,7 +30,7 @@ try:
         image_stream.seek(0)
         image = Image.open(image_stream)
         #print('Image is %dx%d' % image.size)
-        image.save('../results/pics1/'+str(count).zfill(4)+'.jpg')
+        image.save('../results/raw/camera1/'+str(count).zfill(4)+'.jpg')
         #image.verify()
         #print('Image is verified')
         count+=1
