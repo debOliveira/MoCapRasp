@@ -25,24 +25,23 @@ class ImageProcessor(threading.Thread):
                     self.stream.seek(0)
                     # Read the image and do some processing on it
                     img = cv2.cvtColor(np.array(Image.open(self.stream)),cv2.COLOR_RGB2GRAY)
-                    imgMarkers = cv2.subtract(img, self.owner.bg) 
-                    nonNullCoord = imgMarkers > 127
+                    nonNullCoord = img > 180
                     if np.any(nonNullCoord):
                         a,b = np.nonzero(nonNullCoord.argmax(1))[0], np.nonzero(nonNullCoord.argmax(0))[0]
                         imgMasked = cv2.bitwise_not(img[a[0]-5:a[-1]+5,b[0]-5:b[-1]+5])
                         keypoints = self.owner.detector.detect(imgMasked)
-                        N = np.array(keypoints).shape[0] 
-                        if N < 4:
-                            pass
-                        elif N > 4:
+                        N = np.array(keypoints).shape[0]
+                        if N < 3:
+                            print('lower blob threshold')
+                            continue
+                        elif N > 3:
                             for i in range(0,N): diameter[i] = (keypoints[i].size)
                             orderAscDiameters = np.argsort(diameter)
                             keypoints = [keypoints[orderAscDiameters[0]],keypoints[orderAscDiameters[1]],keypoints[orderAscDiameters[2]]]
-                        msg = np.zeros(11)
-                        for i in range(4):
+                        msg = np.zeros(9)
+                        for i in range(3):
                             msg[i<<1],msg[(i<<1)+1]=keypoints[i].pt[0],keypoints[i].pt[1]
-                        msg[8],msg[9] = a[0],b[0]
-                        msg[10] = time.time_ns()
+                        msg[6],msg[7],msg[8] = a[0],b[0],time.time_ns()
                     # Set done to True if you want the script to terminate
                     # at some point
                     #self.owner.done=True
@@ -53,7 +52,7 @@ class ImageProcessor(threading.Thread):
                     self.event.clear()
                     # Return ourselves to the available pool
                     with self.owner.lock:
-                        self.owner.UDPSocket.sendto(msg.tobytes(),("192.168.0.103", 8888))
+                        if N>=3: self.owner.UDPSocket.sendto(msg.tobytes(),("192.168.0.103", 8888))
                         self.owner.count += 1
                         self.owner.pool.append(self)
 
@@ -67,18 +66,16 @@ class ProcessOutput(object):
         self.processor = None
         # IMAGE CAPTURE
         self.count = 0
-        self.bg = cv2.imread('camera2.jpg', cv2.IMREAD_GRAYSCALE)
-        self.finish = 0  
         # BLOB DETECTOR
         self.params = cv2.SimpleBlobDetector_Params()
         self.params.minThreshold = 0    
         self.params.thresholdStep = 100
         self.params.maxThreshold = 200
         self.params.filterByArea = True
-        self.params.minArea = 20
+        self.params.minArea = 2
         self.params.filterByConvexity = True
         self.params.minConvexity = 0.95
-        self.params.minDistBetweenBlobs = 10
+        self.params.minDistBetweenBlobs = 0
         self.params.filterByColor = True
         self.params.blobColor = 0
         self.params.minRepeatability =  1
@@ -105,7 +102,6 @@ class ProcessOutput(object):
             self.processor.stream.write(buf)
 
     def flush(self):
-        self.finish = time.time()
         print('[INFO] flushing, please wait ...')
         # When told to flush (this indicates end of recording), shut
         # down in an orderly fashion. First, add the current processor
@@ -125,7 +121,7 @@ class ProcessOutput(object):
             proc.join()
         self.UDPSocket.sendto(np.array([0.0]).tobytes(),("192.168.0.103", 8888))
 
-with picamera.PiCamera(resolution=(640,480), framerate=50,
+with picamera.PiCamera(resolution=(640,480), framerate=40,
                        sensor_mode=4) as camera:
     camera.start_preview()
     time.sleep(5)
@@ -135,15 +131,15 @@ with picamera.PiCamera(resolution=(640,480), framerate=50,
     g = camera.awb_gains
     camera.awb_mode = 'off'
     camera.awb_gains = g
+    recTime = 2
     output = ProcessOutput()
     print('start recording')
-    start = time.time()
     camera.start_recording(output, format='mjpeg')
     #while not output.done:
-    camera.wait_recording(2)
+    camera.wait_recording(recTime)
     camera.stop_recording()
     print('end recording')
 
 print('Captured %d frames at %.2ffps' % (
     output.count,
-    output.count / (output.finish - start)))
+    output.count / (recTime)))
