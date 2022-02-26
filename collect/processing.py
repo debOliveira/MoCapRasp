@@ -38,11 +38,11 @@ class ImageProcessor(threading.Thread):
                             for i in range(0,N): diameter[i] = (keypoints[i].size)
                             orderAscDiameters = np.argsort(diameter)
                             keypoints = [keypoints[orderAscDiameters[0]],keypoints[orderAscDiameters[1]],keypoints[orderAscDiameters[2]]]
-                        msg = np.zeros(13)
+                        msg = np.zeros(11)
                         for i in range(4):
                             msg[i<<1],msg[(i<<1)+1]=keypoints[i].pt[0],keypoints[i].pt[1]
-                        msg[8],msg[9],msg[10],msg[11] = a[0],a[-1],b[0],b[-1]
-                        msg[12] = time.time_ns()
+                        msg[8],msg[9] = a[0],b[0]
+                        msg[10] = time.time_ns()
                     # Set done to True if you want the script to terminate
                     # at some point
                     #self.owner.done=True
