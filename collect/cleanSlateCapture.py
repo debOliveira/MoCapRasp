@@ -2,7 +2,6 @@ import io
 import time
 import picamera
 import os
-os.system('rm -rf pics/*')
 
 recTime = 2
 
@@ -18,7 +17,7 @@ class SplitFrames(object):
             if self.output:
                 self.output.close()
             self.frame_num += 1
-            self.output = io.open('bg.jpg', 'wb')
+            self.output = io.open('camera2.jpg', 'wb')
         self.output.write(buf)
 
 with picamera.PiCamera(resolution=(640,480), framerate=40,
@@ -44,3 +43,4 @@ with picamera.PiCamera(resolution=(640,480), framerate=40,
 print('Captured %d frames at %.2ffps' % (
     output.frame_num,
     output.frame_num / (finish - start)))
+os.system('sshpass -p "debora123#" scp camera2.jpg debora@192.168.0.103:~/Desktop/MoCapRasps/results')
