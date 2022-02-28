@@ -1,6 +1,7 @@
-import cv2
+from cv2.fisheye import undistortPoints
 import numpy as np
 from sklearn import linear_model
+import os,shutil,glob
 
 def myUndistortPointsFisheye(pts,K,D):
     # save variables
@@ -10,7 +11,7 @@ def myUndistortPointsFisheye(pts,K,D):
     cx = K[0,2]
     cy = K[1,2]
     # remove destortion
-    undPts_norm = cv2.fisheye.undistortPoints(pts, K, D)
+    undPts_norm = undistortPoints(pts, K, D)
     undPts_norm = undPts_norm.reshape(-1,2)
     # remove normalization
     undistPts= np.zeros_like(undPts_norm)
@@ -32,9 +33,8 @@ def getCoordinate(keypoints,idx,cameraMatrix,distCoef):
     except: 
         selectedKeypoints = keypoints[idx]
         coord = [selectedKeypoints.pt[0],selectedKeypoints.pt[1]]  
-
-    # undistort
     undPt = myUndistortPointsFisheye(np.array(coord), cameraMatrix, distCoef)
+
     return undPt
 
 def isCollinear(p0, p1, p2):
@@ -85,3 +85,14 @@ def getOrder(centerX,centerY, baseAxis=False, axis = 1):
             order = np.argsort(centerX)
 
     return order, axis
+
+def cleanFolders(number):
+# clean results folder  
+    try:
+        if os.path.isdir('../results/raw'): 
+            if glob.glob('../results/results_'+str(number)+".csv"):
+                os.system('rm -rf ../results/results_'+str(number)+".csv ../results/*zip")
+            shutil.rmtree('../results/raw/camera'+str(number))
+            os.makedirs('../results/raw/camera'+str(number))
+    except OSError as e:
+        print("Error erasing folder", e.strerror)

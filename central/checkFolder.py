@@ -1,54 +1,18 @@
 import warnings
 warnings.filterwarnings("ignore")
 import glob
-import time
-import os,shutil
+from time import sleep,time
 import numpy as np
-import argparse
+from argparse import ArgumentParser
 from PIL import Image
 import cv2
-from itertools import combinations
-from functions import myUndistortPointsFisheye,getCoordinate,isCollinear,reshapeCoord,getOrder
+from functions import myUndistortPointsFisheye,getCoordinate,isCollinear,cleanFolders
+from constants import detector,cameraMatrix,distCoef,allCombinationsOf3
 
-params = cv2.SimpleBlobDetector_Params()  
-params.minThreshold = 0    
-params.thresholdStep = 100
-params.maxThreshold = 200
-params.filterByArea = True
-params.minArea = 20
-params.filterByConvexity = True
-params.minConvexity = 0.95
-params.minDistBetweenBlobs = 10
-params.filterByColor = True
-params.blobColor = 0
-params.minRepeatability =  1
-detector = cv2.SimpleBlobDetector_create(params)
-diameter = [0,0,0,0]
-allIdx = list(range(0,4))
-allCombinationsOf3 = np.array(list(combinations(allIdx,3)))
-centerCoord = np.zeros((3,2)) 
-doubleCollinearIdx = np.zeros((2,3)) 
-meanDist = np.zeros((4,1)) 
-cameraMatrix =np.array([[816.188,0,318.382],
-                                [0,814.325,250.263],
-                                [0,0,1]])
-distCoef = np.array([[-0.292355],[0.199853],[0.386838],[-6.51433]], dtype=np.float32)
-k = 0
-
-# clean results folder   
-def cleanFolders(number):
-    try:
-        if os.path.isdir('../results/raw'): 
-            if glob.glob('../results/results_'+str(number)+".csv"):
-                os.system('rm -rf ../results/results_'+str(number)+".csv ../results/*zip")
-            shutil.rmtree('../results/raw/camera'+str(number))
-            os.makedirs('../results/raw/camera'+str(number))
-    except OSError as e:
-        print("Error erasing folder", e.strerror)
 
 # argument parser configuration
 msg = "This function checks for new images in the 'results/raw/camera' folder"
-parser = argparse.ArgumentParser(description = msg)
+parser = ArgumentParser(description = msg)
 parser.add_argument("-c", "--camera", help = "Number X of the camera that should be listened")
 args = parser.parse_args()
 
@@ -58,13 +22,18 @@ cleanFolders(number)
 newFiles = []
 myFiles = []
 locked = True
+diameter = [0,0,0,0]
+centerCoord = np.zeros((3,2)) 
+doubleCollinearIdx = np.zeros((2,3)) 
+meanDist = np.zeros((4,1)) 
 
 # wait if there are no files in folder
 print('[INFO] waiting recording from camera '+str(number))
 while not len(newFiles): 
-    time.sleep(0.001)
+    sleep(0.001)
     newFiles = glob.glob("../results/raw/camera"+str(number)+"/*jpg")
 
+start = time()
 # init capture from files until csv is trasnfered
 print('[INFO] capture started')
 while not len(glob.glob("".join(["../results/results_",str(number),".csv"]))):
@@ -103,6 +72,7 @@ while not len(glob.glob("".join(["../results/results_",str(number),".csv"]))):
                                 continue
                             collinearCentroids,onePassFlag = i,True    
                     if fourRLinearFlag: 
+                        k=0
                         for i in allCombinationsOf3:
                             centerCoord = getCoordinate(keypoints,i,cameraMatrix,distCoef)  
                             center = np.mean(centerCoord,axis=0)
@@ -130,5 +100,5 @@ while not len(glob.glob("".join(["../results/results_",str(number),".csv"]))):
                         centerCoord[i] = [keypoints[i].pt[0]+b[0]-5,keypoints[i].pt[1]+a[0]-5]  
                     centerCoord = myUndistortPointsFisheye(np.array(centerCoord), cameraMatrix, distCoef)
                         
-
-print('[FINISHED]')
+finish = time()
+print('[FINISHED] Timestamp '+str(finish)+' with '+str(len(myFiles)/(time()-start))+'Hz')
