@@ -32,7 +32,7 @@ class ImageProcessor(threading.Thread):
                         keypoints = self.owner.detector.detect(imgMasked)
                         N = np.array(keypoints).shape[0]
                         if N < 3:
-                            print('lower blob threshold')
+                            print('[WARNING] found less than 3 blobs')
                             continue
                         elif N > 3:
                             for i in range(0,N): diameter[i] = (keypoints[i].size)
@@ -73,7 +73,7 @@ class ProcessOutput(object):
         self.params.maxThreshold = 200
         self.params.filterByArea = True
         self.params.minArea = 2
-        self.params.filterByConvexity = True
+        self.params.filterByConvexity = False
         self.params.minConvexity = 0.95
         self.params.minDistBetweenBlobs = 0
         self.params.filterByColor = True
@@ -82,6 +82,14 @@ class ProcessOutput(object):
         self.detector = cv2.SimpleBlobDetector_create(self.params)
         # UDP SERVER
         self.UDPSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+        self.UDPSocket.sendto(str('hi').encode(),("192.168.0.103", 8888))
+        message,_ = self.UDPSocket.recvfrom(1024)
+        start = float(message.split()[0])
+        self.recTime = float(message.split()[1])
+        print("[INFO] waiting trigger")
+        now = time.time()
+        while now < start:
+            now = time.time()
         
     def write(self, buf):
         if buf.startswith(b'\xff\xd8'):
@@ -124,6 +132,7 @@ class ProcessOutput(object):
 with picamera.PiCamera(resolution=(640,480), framerate=40,
                        sensor_mode=4) as camera:
     camera.start_preview()
+    print('[INFO] warming up camera')
     time.sleep(5)
     camera.shutter_speed = camera.exposure_speed
     camera.exposure_mode = 'off'
@@ -132,14 +141,15 @@ with picamera.PiCamera(resolution=(640,480), framerate=40,
     camera.awb_mode = 'off'
     camera.awb_gains = g
     recTime = 2
+    print('[INFO] create reader object')
     output = ProcessOutput()
-    print('start recording')
+    print('[RECORDING] start recording')
     camera.start_recording(output, format='mjpeg')
     #while not output.done:
-    camera.wait_recording(recTime)
+    camera.wait_recording(output.recTime)
     camera.stop_recording()
-    print('end recording')
+    print('[RECORDING] end recording')
 
-print('Captured %d frames at %.2ffps' % (
+print('[RESULTS] Captured %d frames at %.2ffps' % (
     output.count,
     output.count / (recTime)))
