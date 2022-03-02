@@ -97,3 +97,9 @@ def processCentroids_test(coord,a0,b0):
     for i in range(0,4):
         centerCoord[i] = [coord[i][0]+b0-5,coord[i][1]+a0-5] 
     return centerCoord
+
+def processCentroids_calib(coord,a0,b0):
+    undCoord = myUndistortPointsFisheye(coord,cameraMatrix,distCoef)    
+    for i in range(0,3):
+        undCoord[i] = [undCoord[i][0]+b0-5,undCoord[i][1]+a0-5] 
+    return undCoord

@@ -2,7 +2,7 @@ import socket
 import numpy as np
 import warnings
 warnings.filterwarnings("ignore")
-from functions import processCentroids_test
+from functions import processCentroids_calib
 from cv2 import circle,putText,imshow,waitKey,FONT_HERSHEY_SIMPLEX
 
 bufferSize = 1024
@@ -16,8 +16,8 @@ while True:
     bytesPair = server_socket.recvfrom(bufferSize)
     message = np.frombuffer(bytesPair[0])
     if not (len(message)-1): break
-    coord,a,b,time = message[0:8].reshape(-1,2),message[8],message[9],message[10]
-    undCoord = processCentroids_test(coord,a,b)
+    coord,a,b,time = message[0:6].reshape(-1,2),message[6],message[7],message[8]
+    undCoord = processCentroids_calib(coord,a,b)
     count += 1
     data.append([coord,a,b,undCoord])
 
