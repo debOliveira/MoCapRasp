@@ -21,27 +21,28 @@ class ImageProcessor(threading.Thread):
         while not self.terminated:
             # Wait for an image to be written to the stream
             if self.event.wait(1):
+                captureTime = time.time()-self.owner.start
                 try:
                     self.stream.seek(0)
                     # Read the image and do some processing on it
                     img = cv2.cvtColor(np.array(Image.open(self.stream)),cv2.COLOR_RGB2GRAY)
-                    nonNullCoord = img > 180
+                    nonNullCoord = img > 200
                     if np.any(nonNullCoord):
                         a,b = np.nonzero(nonNullCoord.argmax(1))[0], np.nonzero(nonNullCoord.argmax(0))[0]
                         imgMasked = cv2.bitwise_not(img[a[0]-5:a[-1]+5,b[0]-5:b[-1]+5])
                         keypoints = self.owner.detector.detect(imgMasked)
                         N = np.array(keypoints).shape[0]
                         if N < 3:
-                            print('[WARNING] found less than 3 blobs')
+                            print('[WARNING] found only '+str(N)+' blobs')
                             continue
                         elif N > 3:
                             for i in range(0,N): diameter[i] = (keypoints[i].size)
                             orderAscDiameters = np.argsort(diameter)
                             keypoints = [keypoints[orderAscDiameters[0]],keypoints[orderAscDiameters[1]],keypoints[orderAscDiameters[2]]]
-                        msg = np.zeros(9)
+                        msg = np.zeros(10)
                         for i in range(3):
                             msg[i<<1],msg[(i<<1)+1]=keypoints[i].pt[0],keypoints[i].pt[1]
-                        msg[6],msg[7],msg[8] = a[0],b[0],time.time_ns()
+                        msg[6],msg[7],msg[8],msg[9] = a[0],b[0],captureTime,self.owner.count
                     # Set done to True if you want the script to terminate
                     # at some point
                     #self.owner.done=True
@@ -84,14 +85,16 @@ class ProcessOutput(object):
         self.UDPSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
         self.UDPSocket.sendto(str('hi').encode(),("192.168.0.103", 8888))
         message,_ = self.UDPSocket.recvfrom(1024)
-        start = float(message.split()[0])
+        self.start = float(message.split()[0])
         self.recTime = float(message.split()[1])
         print("[INFO] waiting trigger")
         now = time.time()
-        while now < start:
+        while now < self.start:
             now = time.time()
+        self.capturetime = 0
         
     def write(self, buf):
+        self.captureTime = time.time_ns()
         if buf.startswith(b'\xff\xd8'):
             # New frame; set the current processor going and grab
             # a spare one
@@ -129,9 +132,10 @@ class ProcessOutput(object):
             proc.join()
         self.UDPSocket.sendto(np.array([0.0]).tobytes(),("192.168.0.103", 8888))
 
+
 with picamera.PiCamera(resolution=(640,480), framerate=40,
                        sensor_mode=4) as camera:
-    camera.start_preview()
+    #camera.start_preview()
     print('[INFO] warming up camera')
     time.sleep(5)
     camera.shutter_speed = camera.exposure_speed
@@ -140,7 +144,6 @@ with picamera.PiCamera(resolution=(640,480), framerate=40,
     g = camera.awb_gains
     camera.awb_mode = 'off'
     camera.awb_gains = g
-    recTime = 2
     print('[INFO] create reader object')
     output = ProcessOutput()
     print('[RECORDING] start recording')
@@ -152,4 +155,4 @@ with picamera.PiCamera(resolution=(640,480), framerate=40,
 
 print('[RESULTS] Captured %d frames at %.2ffps' % (
     output.count,
-    output.count / (recTime)))
+    output.count / (output.recTime)))
