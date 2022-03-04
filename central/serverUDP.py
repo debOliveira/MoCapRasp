@@ -9,13 +9,13 @@ from cv2 import circle,putText,imshow,waitKey,FONT_HERSHEY_SIMPLEX,destroyAllWin
 class myServer(object):
     def __init__(self):
         # PLEASE CHANGE JUST THE VARIABLES BELOW
-        self.numberCameras,self.triggerTime,self.recTime = 2,5,10
+        self.numberCameras,self.triggerTime,self.recTime = 2,5,30
         # DO NOT CHANGE BELOW THIS LINE
         print('[INFO] creating server')
         self.lock = threading.Lock()
         self.bufferSize,self.server_socket = 80,socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
         self.server_socket.bind(('0.0.0.0',8888))
-        self.data,self.verbose,self.addDic,self.myIPs,self.capture = [],False,{},(),np.ones(self.numberCameras,dtype=np.bool)
+        self.data,self.verbose,self.addDic,self.myIPs,self.capture,self.FPS = [],False,{},(),np.ones(self.numberCameras,dtype=np.bool),40
         for i in range(self.numberCameras): self.data.append([])
 
     def connect(self):
@@ -60,10 +60,11 @@ class myServer(object):
             self.server_socket.close()
             destroyAllWindows()
             print('[RESULTS] server results are')
-            for i in range(self.numberCameras): print('  >> camera '+str(i)+': '+str(len(self.data[i]))+' images, address '+str(self.myIPs[i])+', FPS '+str(len(self.data[i])/self.recTime))
+            for i in range(self.numberCameras): print('  >> camera '+str(i)+': '+str(len(self.data[i]))+' images, address '+str(self.myIPs[i][0])+', FPS '+str(len(self.data[i])/self.recTime))
             timeDiff1,timeDiff2 =[],[]
             for i in range(len(self.data[0])):  timeDiff1.append(self.data[0][i][6])
             for i in range(len(self.data[1])):  timeDiff2.append(self.data[1][i][6])
+            print('[RESULTS] FPS review')
             print('#  min  mean   max ')
             print(1,round(np.diff(timeDiff1).min(),3),round(np.mean(np.diff(timeDiff1)),3),round(np.diff(timeDiff1).max(),3))
             print(2,round(np.diff(timeDiff2).min(),3),round(np.mean(np.diff(timeDiff2)),3),round(np.diff(timeDiff2).max(),3))
@@ -71,35 +72,31 @@ class myServer(object):
             np.savetxt("cam2.csv",self.data[1],delimiter =", ",fmt ='% s')
 
     def checkMatch(self,nPrevious,baseCam,compareCam):
-        compareMatch,baseTime = np.zeros(nPrevious),self.data[baseCam][-int(compareCam/2)][6]
-        for i in range(0,nPrevious):
-            compareMatch[i]=abs(self.data[compareCam][-i][6]-baseTime)
-        print(compareMatch)
+        compareMatch,baseTime = np.zeros(nPrevious),self.data[baseCam][-int(nPrevious/2)][6]
+        for i in range(0,nPrevious): compareMatch[i]=abs(self.data[compareCam][-(i+1)][6]-baseTime)
         return compareMatch.min()
+
+    def getBase(self):       
+        notEmpty,firstTime = np.zeros(self.numberCameras,dtype=np.bool),np.zeros(self.numberCameras)
+        while True:
+            for i in range(self.numberCameras): 
+                if len(self.data[i]): notEmpty[i],firstTime[i] = True,self.data[i][0][6]
+            if np.sum(notEmpty) == self.numberCameras:
+                order = np.flip(np.argsort(firstTime))
+                return order
         
     def match(self):
-        lastLen,match,nPrevious,count,baseCam,otherCam = 0,[],10,0,0,0
-        while True:
-            if len(self.data[1]) and len(self.data[0]):
-                if self.data[1][0][6]>self.data[0][0][6]: 
-                    baseCam,otherCam = 0,1
-                    print(self.data[0][0][6],self.data[1][0][6])
-                else: baseCam,otherCam = 1,0
-                break
-        print(baseCam,otherCam)
+        lastLen,nPrevious,count = 0,10,0
+        baseCam,otherCam = self.getBase()
+        print('[INFO] chosen base is '+str(self.myIPs[baseCam][0]))
         while np.any(self.capture):
             with self.lock:
                 if (len(self.data[otherCam])>nPrevious) and (len(self.data[baseCam])>nPrevious/2) and len(self.data[baseCam])!=lastLen: 
-                    match.append(self.checkMatch(nPrevious,baseCam,otherCam))
-                    if match[-1]>0.5/40: count+=1
+                    if self.checkMatch(nPrevious,baseCam,otherCam)>0.5/self.FPS: 
+                        count+=1
+                        #print(self.checkMatch(nPrevious,baseCam,otherCam))
                     lastLen=len(self.data[baseCam])
-        match = np.array(match)
-        print('invalid = ',count)
-        print(' min  mean   max ',len(match))
-        print(round(match.min(),3),round(np.mean(match),3),round(match.max(),3))
-                # check if at least two are not empty
-                # check if timestamp last captured is less max diff
-                # set valid
+        print('[RESULTS] discarded images via sync mismatch = '+str(count))
 
 myServer_ = myServer()
 tMatch = threading.Thread(target=myServer_.match, args=[])
