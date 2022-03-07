@@ -5,6 +5,7 @@ import picamera
 import cv2
 from PIL import Image
 import numpy as np
+from fractions import Fraction
 
 class ImageProcessor(threading.Thread):
     def __init__(self, owner):
@@ -13,6 +14,7 @@ class ImageProcessor(threading.Thread):
         self.event = threading.Event()
         self.terminated = False
         self.owner = owner
+        self.counterCopy = 0
         self.start()
 
     def run(self):
@@ -21,9 +23,12 @@ class ImageProcessor(threading.Thread):
         while not self.terminated:
             # Wait for an image to be written to the stream
             if self.event.wait(1):
-                captureTime = time.time()-self.owner.start
                 try:
-                    self.stream.seek(0)
+                    captureTime = time.time()-self.owner.start
+                    self.stream.seek(0)                    
+                    with self.owner.lock:
+                        self.counterCopy = self.owner.count
+                        self.owner.count += 1
                     # Read the image and do some processing on it
                     img = cv2.cvtColor(np.array(Image.open(self.stream)),cv2.COLOR_RGB2GRAY)
                     nonNullCoord = img > 200
@@ -36,13 +41,15 @@ class ImageProcessor(threading.Thread):
                             print('[WARNING] found only '+str(N)+' blobs')
                             continue
                         elif N > 3:
+                            print('[WARNING] found '+str(N)+' blobs')
+                            diameter = np.zeros(N)
                             for i in range(0,N): diameter[i] = (keypoints[i].size)
                             orderAscDiameters = np.argsort(diameter)
                             keypoints = [keypoints[orderAscDiameters[0]],keypoints[orderAscDiameters[1]],keypoints[orderAscDiameters[2]]]
                         msg = np.zeros(10)
                         for i in range(3):
                             msg[i<<1],msg[(i<<1)+1]=keypoints[i].pt[0],keypoints[i].pt[1]
-                        msg[6],msg[7],msg[8],msg[9] = a[0],b[0],captureTime,self.owner.count
+                        msg[6],msg[7],msg[8],msg[9]= a[0],b[0],captureTime,self.counterCopy
                     # Set done to True if you want the script to terminate
                     # at some point
                     #self.owner.done=True
@@ -54,7 +61,6 @@ class ImageProcessor(threading.Thread):
                     # Return ourselves to the available pool
                     with self.owner.lock:
                         if N>=3: self.owner.UDPSocket.sendto(msg.tobytes(),("192.168.0.103", 8888))
-                        self.owner.count += 1
                         self.owner.pool.append(self)
 
 class ProcessOutput(object):
@@ -63,7 +69,7 @@ class ProcessOutput(object):
         # Construct a pool of 4 image processors along with a lock
         # to control access between threads
         self.lock = threading.Lock()
-        self.pool = [ImageProcessor(self) for i in range(4)]
+        self.pool = [ImageProcessor(self) for i in range(8)]
         self.processor = None
         # IMAGE CAPTURE
         self.count = 0
@@ -91,10 +97,8 @@ class ProcessOutput(object):
         now = time.time()
         while now < self.start:
             now = time.time()
-        self.capturetime = 0
         
     def write(self, buf):
-        self.captureTime = time.time_ns()
         if buf.startswith(b'\xff\xd8'):
             # New frame; set the current processor going and grab
             # a spare one
@@ -137,13 +141,15 @@ with picamera.PiCamera(resolution=(640,480), framerate=40,
                        sensor_mode=4) as camera:
     #camera.start_preview()
     print('[INFO] warming up camera')
-    time.sleep(5)
     camera.shutter_speed = camera.exposure_speed
-    camera.exposure_mode = 'off'
     camera.color_effects = (128,128)
-    g = camera.awb_gains
+    camera.exposure_mode = 'off'
     camera.awb_mode = 'off'
-    camera.awb_gains = g
+    camera.awb_gains = (Fraction(173, 128), Fraction(193, 128))
+    camera.analog_gain=Fraction(8)
+    camera.digital_gain=Fraction(383,256)
+    time.sleep(1)    
+    
     print('[INFO] create reader object')
     output = ProcessOutput()
     print('[RECORDING] start recording')
