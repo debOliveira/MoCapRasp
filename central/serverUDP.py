@@ -1,21 +1,22 @@
+from nis import match
 import socket,time
 import numpy as np
 import warnings
 import threading
 warnings.filterwarnings("ignore")
 from functions import processCentroids_calib
-from cv2 import circle,putText,imshow,waitKey,FONT_HERSHEY_SIMPLEX,destroyAllWindows
+from cv2 import circle, compare,putText,imshow,waitKey,FONT_HERSHEY_SIMPLEX,destroyAllWindows
 
 class myServer(object):
     def __init__(self):
         # PLEASE CHANGE JUST THE VARIABLES BELOW
-        self.numberCameras,self.triggerTime,self.recTime = 2,5,30
+        self.numberCameras,self.triggerTime,self.recTime = 2,2,30
         # DO NOT CHANGE BELOW THIS LINE
         print('[INFO] creating server')
         self.lock = threading.Lock()
         self.bufferSize,self.server_socket = 80,socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
         self.server_socket.bind(('0.0.0.0',8888))
-        self.data,self.verbose,self.addDic,self.myIPs,self.capture,self.FPS = [],False,{},(),np.ones(self.numberCameras,dtype=np.bool),40
+        self.data,self.verbose,self.addDic,self.myIPs,self.capture,self.FPS,self.waiting= [],False,{},(),np.ones(self.numberCameras,dtype=np.bool),40,np.zeros(self.numberCameras)
         for i in range(self.numberCameras): self.data.append([])
 
     def connect(self):
@@ -33,6 +34,7 @@ class myServer(object):
     
     def collect(self):
         print('[INFO] waiting capture')
+        baseIdx = False
         try:
             while np.any(self.capture):
                 bytesPair = self.server_socket.recvfrom(self.bufferSize)
@@ -41,11 +43,17 @@ class myServer(object):
                 if not (len(message)-1): self.capture[self.addDic[address]] = 0
 
                 if self.capture[self.addDic[address]]:
-                    coord,a,b,time,number = message[0:6].reshape(-1,2),message[6],message[7],message[8],message[9]
+                    coord,a,b,time,imgNumber,idx = message[0:6].reshape(-1,2),message[6],message[7],message[8],message[9],self.addDic[address]
                     undCoord = processCentroids_calib(coord,a,b)
-                    self.data[self.addDic[address]].append(np.concatenate((undCoord.reshape(6),[time])))
-                    if len(self.data[self.addDic[address]]):
-                        self.data[self.addDic[address]]=sorted(self.data[self.addDic[address]], key=lambda x: x[6])
+                    self.data[idx].append(np.concatenate((undCoord.reshape(6),[time,imgNumber])))
+                    self.data[idx]=sorted(self.data[idx], key=lambda x: x[6])     
+                    
+                    if len(self.data[int(not(idx))])>1 and not imgNumber and not baseIdx:
+                        compareCam = int(not(idx))
+                        # print(abs(time-self.data[compareCam][0][6]),abs(time-self.data[compareCam][1][6]))
+                        # verify if img number is really 1 and 0
+                        if abs(time-self.data[compareCam][0][6]) > abs(time-self.data[compareCam][1][6]): del self.data[compareCam][0]
+                        baseIdx = True
 
                     if self.verbose:
                         img,k = np.ones((480,640,3))*25,0
@@ -60,51 +68,19 @@ class myServer(object):
             self.server_socket.close()
             destroyAllWindows()
             print('[RESULTS] server results are')
-            for i in range(self.numberCameras): print('  >> camera '+str(i)+': '+str(len(self.data[i]))+' images, address '+str(self.myIPs[i][0])+', FPS '+str(len(self.data[i])/self.recTime))
-            timeDiff1,timeDiff2 =[],[]
-            for i in range(len(self.data[0])):  timeDiff1.append(self.data[0][i][6])
-            for i in range(len(self.data[1])):  timeDiff2.append(self.data[1][i][6])
-            print('[RESULTS] FPS review')
-            print('#  min  mean   max ')
-            print(1,round(np.diff(timeDiff1).min(),3),round(np.mean(np.diff(timeDiff1)),3),round(np.diff(timeDiff1).max(),3))
-            print(2,round(np.diff(timeDiff2).min(),3),round(np.mean(np.diff(timeDiff2)),3),round(np.diff(timeDiff2).max(),3))
+            for i in range(self.numberCameras): print('  >> camera '+str(i)+': '+str(len(self.data[i]))+' valid images, address '+str(self.myIPs[i][0])+', FPS '+str(len(self.data[i])/self.recTime))
             np.savetxt("cam1.csv",self.data[0],delimiter =", ",fmt ='% s')
             np.savetxt("cam2.csv",self.data[1],delimiter =", ",fmt ='% s')
+            diff = np.array(abs(np.array([row[6] for row in self.data[0]])-np.array([row[6] for row in self.data[1]])))
+            print(diff.min(),np.mean(diff),diff.max())
+            print((diff > 0.5/40).nonzero())
 
-    def checkMatch(self,nPrevious,baseCam,compareCam):
-        compareMatch,baseTime = np.zeros(nPrevious),self.data[baseCam][-int(nPrevious/2)][6]
-        for i in range(0,nPrevious): compareMatch[i]=abs(self.data[compareCam][-(i+1)][6]-baseTime)
-        return compareMatch.min()
-
-    def getBase(self):       
-        notEmpty,firstTime = np.zeros(self.numberCameras,dtype=np.bool),np.zeros(self.numberCameras)
-        while True:
-            for i in range(self.numberCameras): 
-                if len(self.data[i]): notEmpty[i],firstTime[i] = True,self.data[i][0][6]
-            if np.sum(notEmpty) == self.numberCameras:
-                order = np.flip(np.argsort(firstTime))
-                return order
-        
-    def match(self):
-        lastLen,nPrevious,count = 0,10,0
-        baseCam,otherCam = self.getBase()
-        print('[INFO] chosen base is '+str(self.myIPs[baseCam][0]))
-        while np.any(self.capture):
-            with self.lock:
-                if (len(self.data[otherCam])>nPrevious) and (len(self.data[baseCam])>nPrevious/2) and len(self.data[baseCam])!=lastLen: 
-                    if self.checkMatch(nPrevious,baseCam,otherCam)>0.5/self.FPS: 
-                        count+=1
-                        #print(self.checkMatch(nPrevious,baseCam,otherCam))
-                    lastLen=len(self.data[baseCam])
-        print('[RESULTS] discarded images via sync mismatch = '+str(count))
 
 myServer_ = myServer()
-tMatch = threading.Thread(target=myServer_.match, args=[])
 tCollect = threading.Thread(target=myServer_.collect, args=[])
-
-tMatch.start()
+#tOrder = threading.Thread(target=myServer_.order, args=[])
+#tOrder.start()
 myServer_.connect()
 tCollect.start()
-
 tCollect.join()
-tMatch.join()
+#tOrder.join()
