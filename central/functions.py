@@ -1,7 +1,17 @@
-from cv2.fisheye import undistortPoints
+from cv2.fisheye import undistortPoints,initUndistortRectifyMap
+from cv2 import CV_16SC2
 import numpy as np
 from sklearn import linear_model
-from constants import distCoef,cameraMatrix,allCombinationsOf3
+from constants import allCombinationsOf3
+
+cameraMatrix_cam1 =np.array([[816.188,0,318.382],[0,814.325,250.263],[0,0,1]])
+distCoef_cam1 = np.array([[-0.292355],[0.199853],[0.386838],[-6.51433]], dtype=np.float32)
+
+cameraMatrix_cam2 =np.array([[675.551,0,291.424],[0,675.498,282.561],[0,0,1]])
+distCoef_cam2 = np.array([[-0.0817978],[-0.608661],[5.35317],[-14.1123]], dtype=np.float32)
+map1_cam1, map2_cam1 = initUndistortRectifyMap(cameraMatrix_cam1, distCoef_cam1, np.eye(3), cameraMatrix_cam1, (640,480), CV_16SC2)
+map1_cam2, map2_cam2 = initUndistortRectifyMap(cameraMatrix_cam2, distCoef_cam2, np.eye(3), cameraMatrix_cam2, (640,480), CV_16SC2)
+
 
 def myUndistortPointsFisheye(pts,K,D):
     # save variables
@@ -98,8 +108,9 @@ def processCentroids_test(coord,a0,b0):
         centerCoord[i] = [coord[i][0]+b0-5,coord[i][1]+a0-5] 
     return centerCoord
 
-def processCentroids_calib(coord,a0,b0):
-    undCoord = myUndistortPointsFisheye(coord,cameraMatrix,distCoef)    
+def processCentroids_calib(coord,a0,b0,cameraMatrix,distCoef):  
+    undCoord = np.copy(coord)
     for i in range(0,3):
         undCoord[i] = [undCoord[i][0]+b0-5,undCoord[i][1]+a0-5] 
+    undCoord = myUndistortPointsFisheye(undCoord,cameraMatrix,distCoef)  
     return undCoord
