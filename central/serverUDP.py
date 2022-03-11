@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 class myServer(object):
     def __init__(self):
         # PLEASE CHANGE JUST THE VARIABLES BELOW
-        self.numberCameras,self.triggerTime,self.recTime = 2,1,60
+        self.numberCameras,self.triggerTime,self.recTime = 2,5,60
         print('[INFO] creating server')
         self.lock = threading.Lock()
         self.bufferSize,self.server_socket = 80,socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
@@ -108,7 +108,7 @@ class myServer(object):
         print("\nEssenc. Mat.\n", E.round(4))
 
         R, t = decomposeEssentialMat(E, cameraMatrix_cam1, cameraMatrix_cam2, np.array(centroids1), np.array(centroids2))
-        if np.isnan(R): return
+        if np.any(np.isnan(R)): return
         P1 = np.hstack((cameraMatrix_cam1, [[0.], [0.], [0.]]))
         P2 = np.matmul(cameraMatrix_cam2, np.hstack((R, t.T)))
 
@@ -129,8 +129,8 @@ class myServer(object):
 
         tot = 0
         L_real_AC = 15.7
-        L_real_AB = 5.4
-        L_real_BC = 10.3
+        L_real_AB = 10.3
+        L_real_BC = 5.4
         L_AC_vec = []
         L_BC_vec = []
         L_AB_vec = []

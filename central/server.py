@@ -64,8 +64,8 @@ class myServer(object):
                             for i in range(0,N): diameter[i] = (keypoints[i].size)
                             orderAscDiameters = np.argsort(diameter)
                             keypoints = [keypoints[orderAscDiameters[0]],keypoints[orderAscDiameters[1]],keypoints[orderAscDiameters[2]]]
-                        for i in range(3):
-                            print(keypoints[i].pt[0],keypoints[i].pt[1])
+                        #for i in range(3):
+                            #print(keypoints[i].pt[0],keypoints[i].pt[1])
                 # subtract clean plate
                 #img = cv2.cvtColor(np.array(image),cv2.COLOR_RGB2GRAY)
                 # save image
