@@ -6,13 +6,14 @@ import picamera
 import os
 import pandas as pd
 import subprocess
+from fractions import Fraction
 
 var = subprocess.check_output('pgrep ptpd', shell=True)
 pid = var.decode("utf-8")
 #os.system('sshpass -p "debora123#" scp camera2.jpg debora@192.168.0.103:~/Desktop/MoCapRasps/results')
 
-trigger = 5*(10**9) #miliseconds
-recTime = 5
+trigger = 1*(10**9) #miliseconds
+recTime = 10
 print('[INFO] set trigger to '+ str(trigger/(10**9)) + 's '+ 'and recording time to '+ str(recTime) + 's')
 
 class SplitFrames(object):
@@ -37,10 +38,10 @@ class SplitFrames(object):
                 self.stream.seek(0)
         self.stream.write(buf)
 
-'''bufferSize = 1024
+bufferSize = 1024
 UDPServerSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-UDPServerSocket.bind(('192.168.0.102',8888))
-print("[INFO] server running...")'''
+UDPServerSocket.bind(('192.168.0.100',8888))
+print("[INFO] server running...")
 
 client_socket = socket.socket()
 client_socket.connect(('192.168.0.103', 8001))
@@ -48,34 +49,34 @@ connection = client_socket.makefile('wb')
 print("[INFO] connected to central...")
 
 try:
-    with picamera.PiCamera(resolution=(640,480), framerate=40,
-                       sensor_mode=4) as camera:
-        camera.start_preview(fullscreen=False,window=(100,100,640,480))
+    with picamera.PiCamera(resolution=(640,480), framerate=90,
+                       sensor_mode=7) as camera:
+        #camera.start_preview(fullscreen=False,window=(100,100,640,480))
         print("[INFO] setting up camera")
-        time.sleep(5)
-        camera.shutter_speed = camera.exposure_speed
-        camera.exposure_mode = 'off'
-        camera.color_effects = (128,128)
-        g = camera.awb_gains
+        camera.exposure_mode = 'off'    
         camera.awb_mode = 'off'
-        camera.awb_gains = g
+        camera.awb_gains = (Fraction(165, 128), Fraction(51, 32))
+        camera.analog_gain=Fraction(8)
+        camera.digital_gain=Fraction(383,256)
+        camera.shutter_speed = camera.exposure_speed
+        camera.color_effects = (128,128)
         output = SplitFrames(connection)
         
-        '''print("[INFO] waiting for client")
+        print("[INFO] waiting for client")
         bytesPair = UDPServerSocket.recvfrom(bufferSize)
         adress = bytesPair[1]
         timeBase = time.time_ns()
         output.tb = timeBase
         #print(str(adress) + ' >> '+ str(int(timeBase)/(10**9)))
-        UDPServerSocket.sendto(str.encode(str(timeBase)+' '+str(trigger)+' '+str(recTime)),adress)'''
+        UDPServerSocket.sendto(str.encode(str(timeBase)+' '+str(trigger)+' '+str(recTime)),adress)
 
         os.system('sudo kill -9 '+pid)
         print('[INFO] killed PTPD process')
         
-        '''print("[INFO] waiting trigger")
+        print("[INFO] waiting trigger")
         now = time.time_ns()
         while (now - timeBase) < (trigger):
-            now = time.time_ns()'''
+            now = time.time_ns()
         
         print('[RECORDING..]')
 
