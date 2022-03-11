@@ -6,7 +6,7 @@ import picamera
 import os
 import pandas as pd
 import subprocess
-
+from fractions import Fraction
 var = subprocess.check_output('pgrep ptpd', shell=True)
 pid = var.decode("utf-8")
 
@@ -32,7 +32,7 @@ class SplitFrames(object):
                 self.stream.seek(0)
         self.stream.write(buf)
 
-serverAdressPort = ("192.168.0.102", 8888)
+serverAdressPort = ("192.168.0.100", 8888)
 bufferSize = 1024
 UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 
@@ -42,17 +42,17 @@ connection = client_socket.makefile('wb')
 print("[INFO] connected to central...")
 
 try:
-    with picamera.PiCamera(resolution=(640,480), framerate=40,
-                       sensor_mode=4) as camera:
-        camera.start_preview(fullscreen=False,window=(100,100,640,480))
+    with picamera.PiCamera(resolution=(640,480), framerate=90,
+                       sensor_mode=7) as camera:
+        #camera.start_preview(fullscreen=False,window=(100,100,640,480))
         print("[INFO] setting up camera")
-        time.sleep(5)
-        camera.shutter_speed = camera.exposure_speed
-        camera.exposure_mode = 'off'
-        camera.color_effects = (128,128)
-        g = camera.awb_gains
+        camera.exposure_mode = 'off'    
         camera.awb_mode = 'off'
-        camera.awb_gains = g
+        camera.awb_gains = (Fraction(331, 256), Fraction(203, 128))
+        camera.analog_gain=Fraction(8)
+        camera.digital_gain=Fraction(383,256)
+        camera.shutter_speed = camera.exposure_speed
+        camera.color_effects = (128,128)
         output = SplitFrames(connection)
         
         print("[INFO] triggering server")
@@ -92,6 +92,5 @@ print('[RESULTS] csv exported with '+str(len(output.df.index))+' lines')
 os.system('sudo ptpd -s -i eth0')
 print('[INFO] PTPD running')
 os.system('sshpass -p "debora123#" scp results_1.csv debora@192.168.0.103:~/Desktop/MoCapRasps/results')
-os.system('sshpass -p "debora123#" scp camera1.jpg debora@192.168.0.103:~/Desktop/MoCapRasps/results')
 print('[INFO] csv sent to central')
 os.system('rm -rf results_1.csv')

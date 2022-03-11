@@ -6,6 +6,10 @@ import cv2
 from PIL import Image
 import numpy as np
 from fractions import Fraction
+import os
+import subprocess
+pid = os.getpid()
+os.system('sudo renice -n -19 -p '+str(pid))
 
 class ImageProcessor(threading.Thread):
     def __init__(self, owner):
@@ -25,7 +29,7 @@ class ImageProcessor(threading.Thread):
             if self.event.wait(1):
                 try:
                     captureTime = time.time()-self.owner.start
-                    self.stream.seek(0)                    
+                    self.stream.seek(0)
                     with self.owner.lock:
                         self.counterCopy = self.owner.count
                         self.owner.count += 1
@@ -41,7 +45,6 @@ class ImageProcessor(threading.Thread):
                             print('[WARNING] found only '+str(N)+' blobs')
                             continue
                         elif N > 3:
-                            print('[WARNING] found '+str(N)+' blobs')
                             diameter = np.zeros(N)
                             for i in range(0,N): diameter[i] = (keypoints[i].size)
                             orderAscDiameters = np.argsort(diameter)
@@ -69,7 +72,7 @@ class ProcessOutput(object):
         # Construct a pool of 4 image processors along with a lock
         # to control access between threads
         self.lock = threading.Lock()
-        self.pool = [ImageProcessor(self) for i in range(8)]
+        self.pool = [ImageProcessor(self) for i in range(4)]
         self.processor = None
         # IMAGE CAPTURE
         self.count = 0
@@ -97,8 +100,10 @@ class ProcessOutput(object):
         now = time.time()
         while now < self.start:
             now = time.time()
+        self.capturetime = 0
         
     def write(self, buf):
+        self.captureTime = time.time_ns()
         if buf.startswith(b'\xff\xd8'):
             # New frame; set the current processor going and grab
             # a spare one
@@ -137,18 +142,21 @@ class ProcessOutput(object):
         self.UDPSocket.sendto(np.array([0.0]).tobytes(),("192.168.0.103", 8888))
 
 
-with picamera.PiCamera(resolution=(640,480), framerate=40,
+with picamera.PiCamera(resolution=(640,480), framerate=35,
                        sensor_mode=4) as camera:
-    #camera.start_preview()
+    #camera.start_preview(fullscreen=False,window=(100,200,320,240))
     print('[INFO] warming up camera')
-    camera.shutter_speed = camera.exposure_speed
-    camera.color_effects = (128,128)
-    camera.exposure_mode = 'off'
+    camera.exposure_mode = 'off'    
     camera.awb_mode = 'off'
-    camera.awb_gains = (Fraction(173, 128), Fraction(193, 128))
+    camera.awb_gains = (Fraction(331, 256), Fraction(203, 128))
     camera.analog_gain=Fraction(8)
     camera.digital_gain=Fraction(383,256)
-    time.sleep(1)    
+    camera.shutter_speed = camera.exposure_speed
+    camera.color_effects = (128,128)
+    var = subprocess.check_output('pgrep ptpd', shell=True)
+    pid = var.decode("utf-8")
+    os.system('sudo kill -9 '+pid)
+    print('[INFO] killed PTPD process')
     
     print('[INFO] create reader object')
     output = ProcessOutput()
@@ -162,3 +170,5 @@ with picamera.PiCamera(resolution=(640,480), framerate=40,
 print('[RESULTS] Captured %d frames at %.2ffps' % (
     output.count,
     output.count / (output.recTime)))
+os.system('sudo ptpd -s -i eth0 -E')
+print('[INFO] PTPD running')
