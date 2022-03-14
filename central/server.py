@@ -1,5 +1,6 @@
 import io
 import socket
+from socketserver import ThreadingUDPServer
 import struct
 from PIL import Image
 import cv2
@@ -7,7 +8,7 @@ import numpy as np
 import threading
 
 
-class myServer(object):
+class myTCPServer(object):
     def __init__(self,number):
         print('[INFO] starting server '+str(number))
         self.count=0
@@ -29,8 +30,12 @@ class myServer(object):
         self.params.blobColor = 0
         self.params.minRepeatability =  1
         self.detector = cv2.SimpleBlobDetector_create(self.params)
+        self.capturing = True
+        self.myUDPServer_ = myUDPServer(number)
     
     def run(self):
+        t = threading.Thread(target=self.myUDPServer_.run,args=[self])
+        t.start()
         # Accept a single connection and make a file-like object out of it
         connection = self.server_socket.accept()[0].makefile('rb')
         print('[INFO] client connected')
@@ -66,24 +71,41 @@ class myServer(object):
                             keypoints = [keypoints[orderAscDiameters[0]],keypoints[orderAscDiameters[1]],keypoints[orderAscDiameters[2]]]
                         #for i in range(3):
                             #print(keypoints[i].pt[0],keypoints[i].pt[1])
-                # subtract clean plate
-                #img = cv2.cvtColor(np.array(image),cv2.COLOR_RGB2GRAY)
-                # save image
-                #image = Image.fromarray(img)
-                #image.save('../results/raw/camera'+str(self.number)+'/'+str(self.count).zfill(4)+'.jpg')
-                #image.verify()
-                #print('Image is verified')
                 self.count+=1
         finally:
             connection.close()
             self.server_socket.close()
             print('[FINISHED] server '+str(self.number)+' >> '+str(self.count)+' images captured')
+            self.capturing=False
+            t.join()
+            print('[INFO] closed UDP server '+str(self.number)+' thread')
 
-server1 = myServer(number=1)
-server2 = myServer(number=2)
-t1 = threading.Thread(target=server1.run, args=[])
-t2 = threading.Thread(target=server2.run, args=[])
-t1.start()
-t2.start()
-t1.join()
-t2.join()
+class myUDPServer(object):
+    def __init__(self,number):
+        self.server_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+        self.server_socket.bind(('0.0.0.0',8799+number))
+        print('[INFO] starting UDP server '+str(number))
+    
+    def run(self,owner):
+        try:
+            #while owner.capturing:
+            pass
+                #timestamp = np.frombuffer(self.server_socket.recvfrom(1024),dtype=np.float64)
+                #print(owner.number, timestamp)
+        finally:
+            self.server_socket.close()            
+class myServers(object):
+    def __init__(self):
+        self.numberCameras,self.myThreads = 2,[]
+        for i in range(self.numberCameras):
+            server = myTCPServer(number=i+1)
+            t = threading.Thread(target=server.run, args=[])
+            t.start()
+            self.myThreads.append(t)
+    def __exit__(self):
+        for i in range(self.numberCameras):
+            t = self.myThreads[i]
+            t.join()
+            print('[INFO] closed TCP server '+str(i)+' thread')
+
+myServers_ = myServers()
