@@ -6,29 +6,36 @@
 # http://crm.ii.uam.es/
 # License: Public Domain, attribution appreciated
 
-import cv2
 import numpy as np
 import subprocess as sp
-import time
-import atexit
+import time,cv2,atexit,socket
 
+print('[INFO] configuring parameters')
 frames = [] # stores the video sequence for the demo
-max_frames = 300
-
 N_frames = 0
-
 # Video capture parameters
 (w,h) = (640,480)
 bytesPerFrame = w * h
-fps = 80 # setting to 250 will request the maximum framerate possible
+fps = 90 # setting to 250 will request the maximum framerate possible
 
 # "raspividyuv" is the command that provides camera frames in YUV format
 #  "--output -" specifies stdout as the output
 #  "--timeout 0" specifies continuous video
 #  "--luma" discards chroma channels, only luminance is sent through the pipeline
 # see "raspividyuv --help" for more information on the parameters
-videoCmd = "raspividyuv -w "+str(w)+" -h "+str(h)+" --output - --timeout 0 --framerate "+str(fps)+" --luma --nopreview"
+videoCmd = "raspividyuv -w "+str(w)+" -h "+str(h)+" --output - --timeout 0 --framerate "+str(fps)+" --luma --nopreview"# -awb off --awbgains 1.3,1.6 -ag 8 -dg 1.5"
 videoCmd = videoCmd.split() # Popen requires that each parameter is a separate string
+
+print('[INFO] connecting to server')
+# Socket parameters
+UDPSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+UDPSocket.sendto(str('hi').encode(),("192.168.0.103", 8888))
+message,_ = UDPSocket.recvfrom(1024)
+start = float(message.split()[0])
+max_frames = int(message.split()[1])
+print('[INFO] waiting trigger')
+now = time.time()
+while now < start: now = time.time()
 
 cameraProcess = sp.Popen(videoCmd, stdout=sp.PIPE) # start the camera
 atexit.register(cameraProcess.terminate) # this closes the camera process in case the python scripts exits unexpectedly
@@ -36,7 +43,7 @@ atexit.register(cameraProcess.terminate) # this closes the camera process in cas
 # wait for the first frame and discard it (only done to measure time more accurately)
 rawStream = cameraProcess.stdout.read(bytesPerFrame)
 
-print("Recording...")
+print("RECORDING ...")
 
 start_time = time.time()
 
@@ -71,7 +78,7 @@ cameraProcess.terminate() # stop the camera
 
 
 elapsed_seconds = end_time-start_time
-print("Done! Result: "+str(N_frames/elapsed_seconds)+" fps")
+print("[RESULTS] "+str(N_frames/elapsed_seconds)+" FPS")
 
 
 '''print("Writing frames to disk...")
@@ -82,9 +89,9 @@ for n in range(N_frames):
     out.write(frame_rgb)
 out.release()'''
 
-'''print("Display frames with OpenCV...")
+print("Display frames with OpenCV...")
 for frame in frames:
     cv2.imshow("Slow Motion", frame)
-    cv2.waitKey(1) # request maximum refresh rate
+    cv2.waitKey(10) # request maximum refresh rate
 
-cv2.destroyAllWindows()'''
+cv2.destroyAllWindows()
