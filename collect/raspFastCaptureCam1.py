@@ -26,19 +26,17 @@ fps = 90 # setting to 250 will request the maximum framerate possible
 videoCmd = "raspividyuv -w "+str(w)+" -h "+str(h)+" --output - --timeout 0 --framerate "+str(fps)+" --luma --nopreview -awb off --awbgains 1.3,1.8 -ag 8 -dg 1.5"
 videoCmd = videoCmd.split() # Popen requires that each parameter is a separate string
 
-'''print('[INFO] connecting to server')
+print('[INFO] connecting to server')
 # Socket parameters
 UDPSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-UDPSocket.sendto(str('hi').encode(),("192.168.0.103", 8888))
+UDPSocket.sendto(str('hi').encode(),("192.168.0.104", 8888))
 message,_ = UDPSocket.recvfrom(1024)
 start = float(message.split()[0])
 max_frames = int(message.split()[1])
 print('[INFO] waiting trigger')
 now = time.time()
 while now < start: now = time.time()
-print('[INFO] delay in sec: ',now-start)'''
-
-max_frames = 500
+print('[INFO] delay in sec: ',now-start)
 
 cameraProcess = sp.Popen(videoCmd, stdout=sp.PIPE) # start the camera
 atexit.register(cameraProcess.terminate) # this closes the camera process in case the python scripts exits unexpectedly
