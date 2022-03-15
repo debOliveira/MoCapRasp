@@ -9,8 +9,8 @@ os.system('rm -rf /dev/shm/*.bmp')
 
 params = cv2.SimpleBlobDetector_Params()
 params.minThreshold = 0   
-params.thresholdStep = 50
-params.maxThreshold = 105
+params.thresholdStep = 40
+params.maxThreshold = 85
 params.minDistBetweenBlobs = 2
 params.filterByColor = True
 params.filterByConvexity = False
@@ -39,7 +39,7 @@ def imageProcessing():
             start=time.time()
             img = (yield)
             counter+=1
-            _,thresh = cv2.threshold(img,220,255,cv2.THRESH_BINARY)
+            _,thresh = cv2.threshold(img,240,255,cv2.THRESH_BINARY)
             coord = cv2.findNonZero(thresh).reshape(-1,2).T
             xMin,xMax=min(coord[1]),max(coord[1])
             yMin,yMax=min(coord[0]),max(coord[0])
