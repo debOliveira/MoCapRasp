@@ -76,7 +76,8 @@ def orderCenterCoord(centerCoord, prevCenterCoord, otherCamOrder = 0):
             # if the markers are wrong, swap the extremities
             signal, valid = getSignal(centerY[order[0]], centerY[order[2]],5)
             if signal != otherCamOrder and valid: order = swapElements(order, 0, 2)    
-        else: otherCamOrder,_ = getSignal(centerY[order[0]], centerY[order[2]])       
+        else: 
+            otherCamOrder,_ = getSignal(centerY[order[0]], centerY[order[2]])       
               # get base for comparision (first camera only)                  
         # sort centers        
         sortedCenterCoord = np.array((centerCoord[order[0]], centerCoord[order[1]], centerCoord[order[2]]))

@@ -5,9 +5,10 @@ import warnings
 import threading
 warnings.filterwarnings("ignore")
 from functions import processCentroids_calib,map1_cam1,map1_cam2,map2_cam1,map2_cam2,cameraMatrix_cam1,cameraMatrix_cam2,distCoef_cam1,distCoef_cam2
-from cv2 import circle,putText,imshow,waitKey,FONT_HERSHEY_SIMPLEX,destroyAllWindows,triangulatePoints
+from cv2 import circle,putText,imshow,waitKey,FONT_HERSHEY_SIMPLEX,destroyAllWindows,triangulatePoints,moveWindow
 from myLib import orderCenterCoord,getPreviousCentroid,estimateFundMatrix_8norm,decomposeEssentialMat,myProjectionPoints,isCollinear
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 class myServer(object):
     def __init__(self):
@@ -17,7 +18,7 @@ class myServer(object):
         self.lock = threading.Lock()
         self.bufferSize,self.server_socket = 80,socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
         self.server_socket.bind(('0.0.0.0',8888))
-        self.data,self.verbose,self.addDic,self.myIPs,self.capture,self.FPS,self.match,self.myIPs,self.miss= [],False,{},(),np.ones(self.numberCameras,dtype=np.bool),70,[],[],0
+        self.data,self.verbose,self.addDic,self.myIPs,self.capture,self.FPS,self.match,self.myIPs,self.miss= [],True,{},(),np.ones(self.numberCameras,dtype=np.bool),90,[],[],0
         for i in range(self.numberCameras): self.data.append([])
 
     def connect(self):
@@ -53,7 +54,7 @@ class myServer(object):
                     else:
                         for i in range(imgNumber-len(self.data[idx])): self.data[idx].append([0,0,0,0,0,0,0,0,False])
                         self.data[idx].append(np.concatenate((undCoord.reshape(6),[time,imgNumber,True])))
-                    
+
                     idxCompare = int(not(idx))
                     if len(self.data[idxCompare])>=imgNumber+1: 
                         if self.data[idx][imgNumber][8] and self.data[idxCompare][imgNumber][8]: self.match.append(imgNumber)                                
@@ -92,11 +93,12 @@ class myServer(object):
                         k+=1
                     imshow(str(idxCompare),img)
                     waitKey(1)
+                    moveWindow(str(idxCompare), 700,10);
 
                 if isCollinear(*pts1) and isCollinear(*pts2):                
                     prev1,prev2 = getPreviousCentroid(hasPrevious, centroids1[len(centroids1)-3:(len(centroids1))]),getPreviousCentroid(hasPrevious, centroids2[len(centroids2)-3:(len(centroids2))])
                     sorted1, otherCamOrder = orderCenterCoord(pts1,prev1)
-                    sorted2, _ = orderCenterCoord(pts2, prev2,otherCamOrder)
+                    sorted2, _ = orderCenterCoord(pts2,prev2,otherCamOrder)
                     if not hasPrevious:
                         centroids1,centroids2 = np.copy(sorted1),np.copy(sorted2)
                     else:
@@ -193,6 +195,54 @@ class myServer(object):
                 i = i + 1
         print("Images distant more than 1% from the real value = " +
             str(i)+'/'+str(int(points3d.shape[0]/3)))
+
+        fig = plt.figure(figsize=(8, 8))
+        ax = plt.axes(projection='3d')
+        ax.set_xlim(-0.1, 3.1)
+        ax.set_zlim(-0.4, 0.4)
+        ax.set_ylim(-0.1, 4)
+        ax.set_xlabel('X')
+        ax.set_ylabel('Z')
+        ax.set_zlabel('Y')
+
+        scale = 0.3
+        ax.quiver(0, 0, 0, scale, 0, 0,  # x0,y0,z0,x1,y1,z1
+                arrow_length_ratio=0.1, edgecolors="r")
+        ax.quiver(0, 0, 0, 0, 0, scale,
+                arrow_length_ratio=0.1, edgecolors="b")
+        ax.quiver(0, 0, 0, 0, scale, 0,
+                arrow_length_ratio=0.1, edgecolors="g")
+        ax.scatter(0, 0, 0, edgecolor="blue", facecolor="black")
+
+        x = np.array([scale, 0, 0])
+        y = np.array([0, scale, 0])
+        z = np.array([0, 0, scale])
+        x = np.matmul(R.T, x)
+        y = np.matmul(R.T, y)
+        z = np.matmul(R.T, z)
+
+        t_aux = np.matmul(-t, R)*lamb/100
+
+        ax.quiver(t_aux[0][0], t_aux[0][2], t_aux[0][1],
+                x[0], x[2], x[1], arrow_length_ratio=0.1, edgecolors="r")
+        ax.quiver(t_aux[0][0], t_aux[0][2], t_aux[0][1],
+                y[0], y[2], y[1], arrow_length_ratio=0.1, edgecolors="b")
+        ax.quiver(t_aux[0][0], t_aux[0][2], t_aux[0][1],
+                z[0], z[2], z[1], arrow_length_ratio=0.1, edgecolors="g")
+        ax.scatter(t_aux[0][0], t_aux[0][2], t_aux[0][1],
+                edgecolor="r", facecolor="gold")
+
+        cmhot = plt.get_cmap("jet")
+
+        #ax.view_init(elev=0, azim=-90)  # -37.5,30
+        #ax.view_init(elev=-70, azim=-120)  # -37.5,30
+        ax.view_init(elev=35, azim=-110)  # -37.5,30
+        ax.scatter(points3d[:, 0]*lamb/100, points3d[:, 2]*lamb/100,
+                points3d[:, 1]*lamb/100, c=points3d[:, 2], cmap=cmhot)
+        plt.gca().invert_zaxis()
+        ax.get_proj = lambda: np.dot(Axes3D.get_proj(ax), np.diag([1., 1., .3, 1.]))
+        plt.show()
+
 
 myServer_ = myServer()
 tCollect = threading.Thread(target=myServer_.collect, args=[])
