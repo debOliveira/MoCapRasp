@@ -45,7 +45,7 @@ def getOrder(centerX,centerY, baseAxis=False, axis = 1):
         else: order = np.argsort(centerX)
     return order, axis
 
-def getSignal(num1, num2, tol=10**6):
+def getSignal(num1, num2, tol=10**(-6)):
     if abs(num1-num2) <= tol: return 0,False
     if (num1-num2) < 0: return -1,True
     else: return 1,True

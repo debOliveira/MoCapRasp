@@ -5,7 +5,7 @@ import warnings
 import threading
 warnings.filterwarnings("ignore")
 from functions import processCentroids_calib,map1_cam1,map1_cam2,map2_cam1,map2_cam2,cameraMatrix_cam1,cameraMatrix_cam2,distCoef_cam1,distCoef_cam2
-from cv2 import circle,putText,imshow,waitKey,FONT_HERSHEY_SIMPLEX,destroyAllWindows,triangulatePoints,moveWindow
+from cv2 import circle,putText,imshow,waitKey,FONT_HERSHEY_SIMPLEX,destroyAllWindows,triangulatePoints,moveWindow,imwrite
 from myLib import orderCenterCoord,getPreviousCentroid,estimateFundMatrix_8norm,decomposeEssentialMat,myProjectionPoints,isCollinear
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -13,7 +13,7 @@ from mpl_toolkits.mplot3d import Axes3D
 class myServer(object):
     def __init__(self):
         # PLEASE CHANGE JUST THE VARIABLES BELOW
-        self.numberCameras,self.triggerTime,self.recTime = 2,5,1000
+        self.numberCameras,self.triggerTime,self.recTime = 2,5,4000
         print('[INFO] creating server')
         self.lock = threading.Lock()
         self.bufferSize,self.server_socket = 80,socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
@@ -67,38 +67,22 @@ class myServer(object):
                 valid = [row[8] for row in self.data[i]]
                 print('  >> camera '+str(i)+': '+str(int(np.sum(valid)))+' captured valid images images, address '+str(self.myIPs[i][0]))
             print('[RESULTS] missed '+str(int(self.miss))+' images')
+            np.savetxt("cam1.csv",[row[0:6] for row in self.data[0]],delimiter =", ",fmt ='% s')
+            np.savetxt("cam2.csv",[row[0:6] for row in self.data[1]],delimiter =", ",fmt ='% s')
     
     def order(self,idxBase=0,idxCompare=1):
-        hasPrevious,centroids1,centroids2 = False,[0],[0]
+        hasPrevious,centroids1,centroids2,invalid = False,[0],[0],0
         while len(self.match) or np.any(self.capture):
             if len(self.match):
                 imgNumber = self.match[0]
                 pts1,pts2 = np.array(self.data[idxBase][imgNumber][0:6]).reshape(-1,2),np.array(self.data[idxCompare][imgNumber][0:6]).reshape(-1,2)
 
-                if self.verbose:
-                    img,k = np.ones((480,640,3))*25,0
-                    for pt in pts1:
-                        center = (int(np.round(pt[0]*16)), int(np.round(pt[1]*16)))
-                        circle(img,center,10,(255,0,0),5,shift=4)
-                        putText(img,str(k),(int(center[0]/16)-25, int(center[1]/16)-25),FONT_HERSHEY_SIMPLEX,0.5,(255,0,0),2) 
-                        k+=1
-                    imshow(str(idxBase),img)
-                    waitKey(1)
-
-                    img,k = np.ones((480,640,3))*25,0
-                    for pt in pts2:
-                        center = (int(np.round(pt[0]*16)), int(np.round(pt[1]*16)))
-                        circle(img,center,10,(255,0,0),5,shift=4)
-                        putText(img,str(k),(int(center[0]/16)-25, int(center[1]/16)-25),FONT_HERSHEY_SIMPLEX,0.5,(255,0,0),2) 
-                        k+=1
-                    imshow(str(idxCompare),img)
-                    waitKey(1)
-                    moveWindow(str(idxCompare), 700,10);
-
-                if isCollinear(*pts1) and isCollinear(*pts2):                
-                    prev1,prev2 = getPreviousCentroid(hasPrevious, centroids1[len(centroids1)-3:(len(centroids1))]),getPreviousCentroid(hasPrevious, centroids2[len(centroids2)-3:(len(centroids2))])
+                if isCollinear(*pts1) and isCollinear(*pts2):     
+                    if invalid>=10: prev1,prev2 = [],[]           
+                    else: prev1,prev2 = getPreviousCentroid(hasPrevious, centroids1[len(centroids1)-3:(len(centroids1))]),getPreviousCentroid(hasPrevious, centroids2[len(centroids2)-3:(len(centroids2))])
                     sorted1, otherCamOrder = orderCenterCoord(pts1,prev1)
                     sorted2, _ = orderCenterCoord(pts2,prev2,otherCamOrder)
+                    #print(otherCamOrder,sorted1,sorted2)
                     if not hasPrevious:
                         centroids1,centroids2 = np.copy(sorted1),np.copy(sorted2)
                     else:
@@ -106,6 +90,28 @@ class myServer(object):
 
                     hasPrevious = True
                     print('matched ',imgNumber)
+
+                    if self.verbose:
+                        img,k = np.ones((480,640,3))*25,0
+                        for pt in sorted1:
+                            center = (int(np.round(pt[0]*16)), int(np.round(pt[1]*16)))
+                            circle(img,center,10,(255,0,0),5,shift=4)
+                            putText(img,str(k),(int(center[0]/16)-25, int(center[1]/16)-25),FONT_HERSHEY_SIMPLEX,0.5,(255,0,0),2) 
+                            k+=1
+                        imshow(str(idxBase),img)
+                        waitKey(1)
+                        #imwrite(str(idxBase)+'/'+str(k).zfill(4)+'.jpg')
+
+                        img,k = np.ones((480,640,3))*25,0
+                        for pt in sorted2:
+                            center = (int(np.round(pt[0]*16)), int(np.round(pt[1]*16)))
+                            circle(img,center,10,(255,0,0),5,shift=4)
+                            putText(img,str(k),(int(center[0]/16)-25, int(center[1]/16)-25),FONT_HERSHEY_SIMPLEX,0.5,(255,0,0),2) 
+                            k+=1
+                        imshow(str(idxCompare),img)
+                        waitKey(1)
+                        moveWindow(str(idxCompare), 700,10);
+                        #imwrite(str(idxCompare)+'/'+str(k).zfill(4)+'.jpg')
                 else: print('non collinear ', imgNumber)
                 del self.match[0]
         
@@ -120,11 +126,8 @@ class myServer(object):
 
         R, t = decomposeEssentialMat(E, cameraMatrix_cam1, cameraMatrix_cam2, np.array(centroids1), np.array(centroids2))
         if np.any(np.isnan(R)): return
-        P1 = np.hstack((cameraMatrix_cam1, [[0.], [0.], [0.]]))
-        P2 = np.matmul(cameraMatrix_cam2, np.hstack((R, t.T)))
-
-        projPt1 = myProjectionPoints(np.array(centroids1))
-        projPt2 = myProjectionPoints(np.array(centroids2))
+        P1,P2 = np.hstack((cameraMatrix_cam1, [[0.], [0.], [0.]])),np.matmul(cameraMatrix_cam2, np.hstack((R, t.T)))
+        projPt1,projPt2 = myProjectionPoints(np.array(centroids1)),myProjectionPoints(np.array(centroids2))
 
         points4d = triangulatePoints(P1.astype(float),
                                         P2.astype(float),
@@ -132,33 +135,25 @@ class myServer(object):
                                         projPt2.astype(float))
         points3d = (points4d[:3, :]/points4d[3, :]).T
 
-        if points3d[0, 2] < 0:
-            points3d = -points3d
+        if points3d[0, 2] < 0: points3d = -points3d
 
         print("\nRot. Mat.\n", R.round(4))
         print("\nTrans. Mat.\n", t.round(4))
 
-        tot = 0
-        L_real_AC = 15.7
-        L_real_AB = 10.3
-        L_real_BC = 5.4
-        L_AC_vec = []
-        L_BC_vec = []
-        L_AB_vec = []
-        k = 0
-
+        tot,L_real_AC,L_real_AB,L_real_BC,L_AC_vec,L_BC_vec,L_AB_vec,k = 0,15.7,10.4,5.3,[],[],[],0
         for [A, B, C] in points3d.reshape([-1, 3, 3]):
-            L_rec_AC = np.linalg.norm(A-C)
-            L_rec_BC = np.linalg.norm(B-C)
-            L_rec_AB = np.linalg.norm(A-B)
+            L_rec_AC,L_rec_BC,L_rec_AB = np.linalg.norm(A-C),np.linalg.norm(B-C),np.linalg.norm(A-B)
+            if L_rec_AB<L_rec_BC: L_rec_AB,L_rec_BC=L_rec_BC,L_rec_AB
+            tot = tot + L_real_AC/L_rec_AC + L_real_BC/L_rec_BC + L_real_AB/L_rec_AB
+            if k:
+                if abs(L_rec_AB*lamb-L_real_AB)>1 or abs(L_rec_AC*lamb-L_real_AC)>1 or abs(L_rec_BC*lamb-L_real_BC)>1:
+                    continue
+            k = k + 3
+            lamb = tot/k
             L_AC_vec.append(L_rec_AC)
             L_BC_vec.append(L_rec_BC)
             L_AB_vec.append(L_rec_AB)
-            tot = tot + L_real_AC/L_rec_AC + L_real_BC/L_rec_BC + L_real_AB/L_rec_AB
-            k = k + 1
 
-        N = points3d.shape[0]
-        lamb = tot/N
 
         print('Scale between real world and triang. point cloud is: ', lamb.round(2))
         print('L_AC >> mean = ' + str((np.mean(L_AC_vec)*lamb).round(4)) +
@@ -183,7 +178,8 @@ class myServer(object):
         ax = fig.axes
         ax[0].minorticks_on()
         plt.grid(which='both')
-        plt.xlim(0,len(np.array(centroids1))/3-1)
+        plt.xlim(0,len(L_AC_vec)-1)
+        plt.draw()
         plt.show()
 
         points3d_new = points3d*lamb
@@ -241,6 +237,7 @@ class myServer(object):
                 points3d[:, 1]*lamb/100, c=points3d[:, 2], cmap=cmhot)
         plt.gca().invert_zaxis()
         ax.get_proj = lambda: np.dot(Axes3D.get_proj(ax), np.diag([1., 1., .3, 1.]))
+        plt.draw()
         plt.show()
 
 
