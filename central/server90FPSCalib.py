@@ -13,12 +13,12 @@ from mpl_toolkits.mplot3d import Axes3D
 class myServer(object):
     def __init__(self):
         # PLEASE CHANGE JUST THE VARIABLES BELOW
-        self.numberCameras,self.triggerTime,self.recTime = 2,5,4000
+        self.numberCameras,self.triggerTime,self.recTime = 2,5,2000
         print('[INFO] creating server')
         self.lock = threading.Lock()
         self.bufferSize,self.server_socket = 80,socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
         self.server_socket.bind(('0.0.0.0',8888))
-        self.data,self.verbose,self.addDic,self.myIPs,self.capture,self.FPS,self.match,self.myIPs,self.miss= [],True,{},(),np.ones(self.numberCameras,dtype=np.bool),90,[],[],0
+        self.data,self.verbose,self.addDic,self.myIPs,self.capture,self.FPS,self.match,self.myIPs,self.miss= [],True,{},(),np.ones(self.numberCameras,dtype=np.bool),40,[],[],0
         for i in range(self.numberCameras): self.data.append([])
 
     def connect(self):
@@ -40,25 +40,29 @@ class myServer(object):
             while np.any(self.capture):
                 bytesPair = self.server_socket.recvfrom(self.bufferSize)
                 message = np.frombuffer(bytesPair[0],dtype=np.float64)
-                address = bytesPair[1]
+                address,sizeMsg = bytesPair[1],len(message)
                 idx = self.addDic[address[0]]
-                if not (len(message)-1): self.capture[idx] = 0
+                if not (sizeMsg-1): self.capture[idx] = 0
 
                 if self.capture[idx]:
-                    coord,a,b,time,imgNumber = message[0:6].reshape(-1,2),message[6],message[7],message[8],int(message[9])
-                    if address[0] == '192.168.0.102': undCoord = processCentroids_calib(coord,a,b,cameraMatrix_cam1,distCoef_cam1)
-                    else: undCoord = processCentroids_calib(coord,a,b,cameraMatrix_cam2,distCoef_cam2)
-                                        
-                    if len(self.data[idx])>imgNumber: self.data[idx][imgNumber] = np.concatenate((undCoord.reshape(6),[time,imgNumber,True]))
-                    elif len(self.data[idx])==imgNumber: self.data[idx].append(np.concatenate((undCoord.reshape(6),[time,imgNumber,True])))
+                    if sizeMsg != 10:
+                        print('[ERROR] '+str(int((sizeMsg-4)/2))+' were found')
+                        self.data[idx].append([0,0,0,0,0,0,0,0,False])
                     else:
-                        for i in range(imgNumber-len(self.data[idx])): self.data[idx].append([0,0,0,0,0,0,0,0,False])
-                        self.data[idx].append(np.concatenate((undCoord.reshape(6),[time,imgNumber,True])))
+                        coord,a,b,time,imgNumber = message[0:6].reshape(-1,2),message[6],message[7],message[8],int(message[9])
+                        if address[0] == '192.168.0.102': undCoord = processCentroids_calib(coord,a,b,cameraMatrix_cam1,distCoef_cam1)
+                        else: undCoord = processCentroids_calib(coord,a,b,cameraMatrix_cam2,distCoef_cam2)
+                                            
+                        if len(self.data[idx])>imgNumber: self.data[idx][imgNumber] = np.concatenate((undCoord.reshape(6),[time,imgNumber,True]))
+                        elif len(self.data[idx])==imgNumber: self.data[idx].append(np.concatenate((undCoord.reshape(6),[time,imgNumber,True])))
+                        else:
+                            for i in range(imgNumber-len(self.data[idx])): self.data[idx].append([0,0,0,0,0,0,0,0,False])
+                            self.data[idx].append(np.concatenate((undCoord.reshape(6),[time,imgNumber,True])))
 
-                    idxCompare = int(not(idx))
-                    if len(self.data[idxCompare])>=imgNumber+1: 
-                        if self.data[idx][imgNumber][8] and self.data[idxCompare][imgNumber][8]: self.match.append(imgNumber)                                
-                        else: self.miss+=1
+                        idxCompare = int(not(idx))
+                        if len(self.data[idxCompare])>=imgNumber+1: 
+                            if self.data[idx][imgNumber][8] and self.data[idxCompare][imgNumber][8]: self.match.append(imgNumber)                                
+                            else: self.miss+=1
         finally:
             self.server_socket.close()
             destroyAllWindows()
@@ -99,6 +103,7 @@ class myServer(object):
                             putText(img,str(k),(int(center[0]/16)-25, int(center[1]/16)-25),FONT_HERSHEY_SIMPLEX,0.5,(255,0,0),2) 
                             k+=1
                         imshow(str(idxBase),img)
+                        moveWindow(str(idxCompare), 10,10);
                         waitKey(1)
                         #imwrite(str(idxBase)+'/'+str(k).zfill(4)+'.jpg')
 
@@ -110,7 +115,7 @@ class myServer(object):
                             k+=1
                         imshow(str(idxCompare),img)
                         waitKey(1)
-                        moveWindow(str(idxCompare), 700,10);
+                        moveWindow(str(idxCompare), 10,10);
                         #imwrite(str(idxCompare)+'/'+str(k).zfill(4)+'.jpg')
                 else: print('non collinear ', imgNumber)
                 del self.match[0]
@@ -119,6 +124,7 @@ class myServer(object):
         np.savetxt("centroids1.csv",centroids1,delimiter =", ",fmt ='% s')
         np.savetxt("centroids2.csv",centroids2,delimiter =", ",fmt ='% s')
 
+
         print("\n")
         F,_ = estimateFundMatrix_8norm(np.array(centroids1),np.array(centroids2))
         E = np.matmul(cameraMatrix_cam2.T, np.matmul(F, cameraMatrix_cam1))
@@ -126,6 +132,8 @@ class myServer(object):
 
         R, t = decomposeEssentialMat(E, cameraMatrix_cam1, cameraMatrix_cam2, np.array(centroids1), np.array(centroids2))
         if np.any(np.isnan(R)): return
+        np.savetxt("R.csv",R,delimiter =", ",fmt ='% s')
+        np.savetxt("t.csv",t,delimiter =", ",fmt ='% s')
         P1,P2 = np.hstack((cameraMatrix_cam1, [[0.], [0.], [0.]])),np.matmul(cameraMatrix_cam2, np.hstack((R, t.T)))
         projPt1,projPt2 = myProjectionPoints(np.array(centroids1)),myProjectionPoints(np.array(centroids2))
 

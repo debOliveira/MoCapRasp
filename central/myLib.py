@@ -18,7 +18,7 @@ def isCollinear(p0, p1, p2):
     m = (y0_LS + y1_LS + y2_LS)/3               # get mean value of error
 
     # if it is less than 1 pixel, they are collinear
-    res = (m < 1)
+    res = (m < 2)
 
     return res
 
