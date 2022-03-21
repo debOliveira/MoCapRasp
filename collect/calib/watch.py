@@ -13,15 +13,12 @@ params.thresholdStep = 40
 params.maxThreshold = 85
 params.minDistBetweenBlobs = 0
 params.filterByColor = True
-params.filterByConvexity = True
-params.minConvexity = 0.95
-params.filterByCircularity = False
-params.minCircularity=0.80
 params.filterByArea= True
 params.minArea = 2
-params.filterByInertia = False
+params.filterByConvexity = True
+params.minConvexity = 0.90
 params.blobColor = 0
-params.minRepeatability =  2
+params.minRepeatability = 1
 detector = cv2.SimpleBlobDetector_create(params)
 
 pid = os.getpid()
@@ -34,21 +31,32 @@ UDPSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 
 def imageProcessing():
     counter=0
+    bitsShift = 4
+    constMultiplier = 16
     while True:
         try:
             start=time.time()
             img = (yield)
             counter+=1
             img = img[:,0:639]
-            _,thresh = cv2.threshold(img,127,255,cv2.THRESH_BINARY) 
+            _,thresh = cv2.threshold(img,127,255,cv2.THRESH_BINARY)
             coord = cv2.findNonZero(thresh).reshape(-1,2).T
             xMin,xMax=min(coord[1]),max(coord[1])
             yMin,yMax=min(coord[0]),max(coord[0])
-            keypoints = detector.detect(cv2.bitwise_not(img[xMin-10:xMax+10,yMin-10:yMax+10]))
+            keypoints = detector.detect(cv2.bitwise_not(cv2.blur(img[xMin-10:xMax+10,yMin-10:yMax+10],(3,3)))) 
             N = np.array(keypoints).shape[0]
-            print(N)
+            #print(N)
+            '''img = cv2.bitwise_not(cv2.blur(img[xMin-10:xMax+10,yMin-10:yMax+10],(3,3)))
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+            for keyPt in keypoints:
+                    center = (int(np.round(keyPt.pt[0]*constMultiplier)), int(np.round(keyPt.pt[1]*constMultiplier)))
+                    radius = int(np.round(keyPt.size/2*constMultiplier))
+                    imgWithKPts = cv2.circle(img, center, radius, (255,0,0), thickness = 1, lineType = 16, shift = bitsShift)
+                    cv2.circle(img, center, 1, (0, 0, 255), -1,  shift = bitsShift)
+            frames.append(img)'''
             msg = np.zeros(N*2+4)
-            for i in range(3): msg[i<<1],msg[(i<<1)+1]=keypoints[i].pt[0],keypoints[i].pt[1]
+            for i in range(3): 
+                msg[i<<1],msg[(i<<1)+1]=keypoints[i].pt[0],keypoints[i].pt[1]
             msg[-4],msg[-3],msg[-2],msg[-1]= xMin,yMin,start,counter
             UDPSocket.sendto(msg.tobytes(),("192.168.0.104", 8888))
             times.append(time.time()-start)
@@ -106,9 +114,9 @@ if __name__ == '__main__':
         print('[RESULTS] processing with '+str(round(1/np.mean(times),2))+'FPS')
         print('[RESULTS] '+str(len(times))+' valid images')
     else: print('[RESULTS] no valid images captured')
-    '''print("Display frames with OpenCV...")
+    print("Display frames with OpenCV...")
     for frame in frames:
         cv2.imshow("Slow Motion", frame)
         cv2.waitKey(10) # request maximum refresh rate
 
-    cv2.destroyAllWindows()'''
+    cv2.destroyAllWindows()

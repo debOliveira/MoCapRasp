@@ -16,7 +16,7 @@ N_frames = 0
 # Video capture parameters
 (w,h) = (640,480)
 bytesPerFrame = w * h
-fps = 40 # setting to 250 will request the maximum framerate possible
+fps = 90 # setting to 250 will request the maximum framerate possible
 
 # "raspividyuv" is the command that provides camera frames in YUV format
 #  "--output -" specifies stdout as the output
