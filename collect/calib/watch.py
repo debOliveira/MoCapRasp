@@ -36,7 +36,7 @@ def imageProcessing():
             start=time.time()
             img = (yield)
             counter+=1
-            #img = img[:,0:639] #40FPS
+            img = img[:,0:639] #40FPS
             _,thresh = cv2.threshold(img,127,255,cv2.THRESH_BINARY)
             coord = cv2.findNonZero(thresh).reshape(-1,2).T
             xMin,xMax=min(coord[1]),max(coord[1])
