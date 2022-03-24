@@ -15,7 +15,7 @@ params.minDistBetweenBlobs = 0
 params.filterByColor = True
 params.filterByArea= True
 params.minArea = 2
-params.filterByConvexity = True
+params.filterByConvexity = False
 params.minConvexity = 0.90
 params.blobColor = 0
 params.minRepeatability = 1
@@ -31,33 +31,22 @@ UDPSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 
 def imageProcessing():
     counter=0
-    bitsShift = 4
-    constMultiplier = 16
     while True:
         try:
             start=time.time()
             img = (yield)
             counter+=1
-            img = img[:,0:639]
+            #img = img[:,0:639] #40FPS
             _,thresh = cv2.threshold(img,127,255,cv2.THRESH_BINARY)
             coord = cv2.findNonZero(thresh).reshape(-1,2).T
             xMin,xMax=min(coord[1]),max(coord[1])
             yMin,yMax=min(coord[0]),max(coord[0])
             keypoints = detector.detect(cv2.bitwise_not(cv2.blur(img[xMin-10:xMax+10,yMin-10:yMax+10],(3,3)))) 
             N = np.array(keypoints).shape[0]
-            #print(N)
-            '''img = cv2.bitwise_not(cv2.blur(img[xMin-10:xMax+10,yMin-10:yMax+10],(3,3)))
-            img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
-            for keyPt in keypoints:
-                    center = (int(np.round(keyPt.pt[0]*constMultiplier)), int(np.round(keyPt.pt[1]*constMultiplier)))
-                    radius = int(np.round(keyPt.size/2*constMultiplier))
-                    imgWithKPts = cv2.circle(img, center, radius, (255,0,0), thickness = 1, lineType = 16, shift = bitsShift)
-                    cv2.circle(img, center, 1, (0, 0, 255), -1,  shift = bitsShift)
-            frames.append(img)'''
-            msg = np.zeros(N*2+4)
+            msg = np.zeros(10)
             for i in range(3): 
                 msg[i<<1],msg[(i<<1)+1]=keypoints[i].pt[0],keypoints[i].pt[1]
-            msg[-4],msg[-3],msg[-2],msg[-1]= xMin,yMin,start,counter
+            msg[6],msg[7],msg[8],msg[9]= xMin,yMin,start,counter
             UDPSocket.sendto(msg.tobytes(),("192.168.0.104", 8888))
             times.append(time.time()-start)
         except GeneratorExit: return
@@ -110,7 +99,7 @@ if __name__ == '__main__':
     watch = OnMyWatch()
     watch.run()
     if (len(times)):
-        times = np.array(times)
+        times = np.array(times[1:])
         print('[RESULTS] processing with '+str(round(1/np.mean(times),2))+'FPS')
         print('[RESULTS] '+str(len(times))+' valid images')
     else: print('[RESULTS] no valid images captured')
