@@ -7,8 +7,8 @@ from constants import allCombinationsOf3
 cameraMatrix_cam1 =np.array([[816.188,0,318.382],[0,814.325,250.263],[0,0,1]])
 distCoef_cam1 = np.array([[-0.292355],[0.199853],[0.386838],[-6.51433]], dtype=np.float32)
 
-cameraMatrix_cam2 =np.array([[675.551,0,291.424],[0,675.498,282.561],[0,0,1]])
-distCoef_cam2 = np.array([[-0.0817978],[-0.608661],[5.35317],[-14.1123]], dtype=np.float32)
+cameraMatrix_cam2 =np.array([[684.117,0.,313.435],[0.,683.027,262.314],[0,0,1]])
+distCoef_cam2 = np.array([[-0.202044],[0.657496],[-1.64378],[0.418432]], dtype=np.float32)
 map1_cam1, map2_cam1 = initUndistortRectifyMap(cameraMatrix_cam1, distCoef_cam1, np.eye(3), cameraMatrix_cam1, (640,480), CV_16SC2)
 map1_cam2, map2_cam2 = initUndistortRectifyMap(cameraMatrix_cam2, distCoef_cam2, np.eye(3), cameraMatrix_cam2, (640,480), CV_16SC2)
 

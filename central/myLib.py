@@ -18,37 +18,56 @@ def isCollinear(p0, p1, p2):
     m = (y0_LS + y1_LS + y2_LS)/3               # get mean value of error
 
     # if it is less than 1 pixel, they are collinear
-    res = (m < 2)
+    res = (m < 1)
 
     return res
 
+def isEqual(pt):
+    A,B,C = pt[0],pt[1],pt[2]
+    AB,AC,BC = np.linalg.norm(A-B),np.linalg.norm(A-C),np.linalg.norm(C-B)
+    return min(AB,AC,BC)<2
+
 def getPreviousCentroid(noPrevious, lastCentroid):
-    if not noPrevious: return []
-    else: return lastCentroid
+    if not noPrevious:
+        return []
+    else:
+        return lastCentroid
 
 def reshapeCoord(coord):
     # first reshape array of coordinates
     coordCopy = np.array(coord).reshape(6)
     # get the Y coordinates of each markers' center
-    coordX,coordY = [coordCopy[0], coordCopy[2], coordCopy[4]],[coordCopy[1], coordCopy[3], coordCopy[5]]
+    coordX = [coordCopy[0], coordCopy[2], coordCopy[4]]
+    coordY = [coordCopy[1], coordCopy[3], coordCopy[5]]
     return coordX,coordY
 
 def getOrder(centerX,centerY, baseAxis=False, axis = 1):
     # get wand direction
-    distY,distX = np.array(centerY).max()-np.array(centerY).min(),np.array(centerX).max()-np.array(centerX).min()   
+    distY = np.array(centerY).max() - np.array(centerY).min()
+    distX = np.array(centerX).max() - np.array(centerX).min()   
     # define the order of the markers 
     if not baseAxis:  #if there is no axis to compare, get maximum dist
-        if distY > distX: order,axis= np.argsort(centerY),1
-        else: order,axis = np.argsort(centerX),0
+        if distY > distX:
+            order = np.argsort(centerY)
+            axis = 1
+        else:
+            order = np.argsort(centerX)
+            axis = 0
     else:  # if there is a previous frame, compare to its axis
-        if axis: order = np.argsort(centerY)
-        else: order = np.argsort(centerX)
+        if axis:
+            order = np.argsort(centerY)
+        else:
+            order = np.argsort(centerX)
     return order, axis
 
+
 def getSignal(num1, num2, tol=10**(-6)):
-    if abs(num1-num2) <= tol: return 0,False
-    if (num1-num2) < 0: return -1,True
-    else: return 1,True
+    if abs(num1-num2) <= tol:
+        return 0,False
+    if (num1-num2) < 0:
+        return -1,True
+    else:
+        return 1,True
 
 def swapElements(arr, idx1, idx2):
     aux = arr[idx1]
@@ -60,32 +79,43 @@ def findNearestC(nearestA, nearestB): # get the numer missing from the array [0,
     vec = np.array([nearestA, nearestB])
     is0, = np.where(vec == 0)
     is1, = np.where(vec == 1)
-    is0,is1 = len(is0),len(is1)
+    is0 = len(is0)
+    is1 = len(is1)
     if is0:
-        if is1: return 2
-        else: return 1
-    else: return 0
+        if is1:
+            return 2
+        else:
+            return 1
+    else:
+        return 0
 
 def orderCenterCoord(centerCoord, prevCenterCoord, otherCamOrder = 0):
     centerX, centerY = reshapeCoord(centerCoord)
+
     # if it is the first image of the sequence
     if len(prevCenterCoord) == 0:  
-        order,_ =  getOrder(centerX,centerY) 
+        order,_ =  getOrder(centerX,centerY)         
+
         # if it is the second camera
         if otherCamOrder != 0:  
             # if the markers are wrong, swap the extremities
             signal, valid = getSignal(centerY[order[0]], centerY[order[2]],5)
-            if signal != otherCamOrder and valid: order = swapElements(order, 0, 2)    
-        else: 
-            otherCamOrder,_ = getSignal(centerY[order[0]], centerY[order[2]])       
-              # get base for comparision (first camera only)                  
+            if signal != otherCamOrder and valid:
+                order = swapElements(order, 0, 2)    
+        else:        
+            # get base for comparision (first camera only)        
+            otherCamOrder,_ = getSignal(centerY[order[0]], centerY[order[2]])
+
         # sort centers        
         sortedCenterCoord = np.array((centerCoord[order[0]], centerCoord[order[1]], centerCoord[order[2]]))
     else:
         # first reshape array of coordinates
         prevCenterX,prevCenterY = reshapeCoord(prevCenterCoord)
+
         # distance from marker A/B of previous img to center coordiantes of actual img
-        distA,distB = np.sqrt(np.power(np.subtract(prevCenterX[0], centerX), 2) + np.power(np.subtract(prevCenterY[0], centerY), 2)),np.sqrt(np.power(np.subtract(prevCenterX[1], centerX), 2) + np.power(np.subtract(prevCenterY[1], centerY), 2))
+        distA = np.sqrt(np.power(np.subtract(prevCenterX[0], centerX), 2) + np.power(np.subtract(prevCenterY[0], centerY), 2))
+        distB = np.sqrt(np.power(np.subtract(prevCenterX[1], centerX), 2) + np.power(np.subtract(prevCenterY[1], centerY), 2))
+
         # nearest marker from A is selected and removed as marker B candidate
         nearestA = np.argmin(distA)
         distBCopy = np.delete(distB, nearestA)
@@ -95,6 +125,7 @@ def orderCenterCoord(centerCoord, prevCenterCoord, otherCamOrder = 0):
         distBCopy = np.delete(distBCopy, nearestBCopy)
         # get the missing marker position in array
         nearestC = findNearestC(nearestA, nearestB[0])
+
         # sort centers        
         sortedCenterCoord = [centerCoord[nearestA], centerCoord[nearestB[0]], centerCoord[nearestC]]
         # check if the ordering is ok
@@ -104,7 +135,8 @@ def orderCenterCoord(centerCoord, prevCenterCoord, otherCamOrder = 0):
         if (order[1] != 1) or (order[2] != prevOrder[2]):
             if prevOrder[0] == 2: order = swapElements(order,0,2) #if is decreasing, swap                
             sortedCenterCoord = np.array((sortedCenterCoord[order[0]], sortedCenterCoord[order[1]], sortedCenterCoord[order[2]]))
-    return sortedCenterCoord, otherCamOrder    
+
+    return sortedCenterCoord, otherCamOrder
 
 def mySVD(E):
     U,Ddiag,V = np.linalg.svd(E)
@@ -112,70 +144,6 @@ def mySVD(E):
     np.fill_diagonal(D, Ddiag)
     V = V.T.conj() 
     return U,D,V
-
-def normalisePoints(pts):
-    # calculate origin centroid
-    center = np.mean(pts,axis=0)
-    # translate points to centroid
-    traslatedPts = pts - center
-    # calculate scale for the average point to be (1,1,1) >> homogeneous
-    meanDist2Center = np.mean(np.linalg.norm(traslatedPts,axis=1))
-    if meanDist2Center: # protect against division by zero
-        scale = np.sqrt(2)/meanDist2Center
-    else:
-        return pts, 0, False
-    
-    # compute translation matrix >> (x-x_c)*scale
-    T = np.diag((scale,scale,1))
-    T[0:2,2] = -scale*center
-
-    # transform in homogeneous coordinates
-    homogeneousPts = np.vstack((pts.T,np.ones((1,pts.shape[0]))))
-    normPoints = np.matmul(T,homogeneousPts)
-    return normPoints, T, True
-
-def erroReprojection(F,pts1,pts2):  # pts are Nx3 array of homogenous coordinates.  
-    # how well F satisfies the equation pt1 * F * pt2 == 0
-    vals = np.matmul(pts2.T,np.matmul(F,pts1))
-    err = np.abs(vals)
-    print("avg x'Fx=0:",np.mean(err))
-    print("max x'Fx=0:",np.max(err))
-    return np.mean(err)
-
-def estimateFundMatrix_8norm(pts1,pts2):
-    # get number of matched points
-    numPoints = pts1.shape[0]
-    # transform to normalized points
-    normPts1,t1,valid1 = normalisePoints(pts1) 
-    normPts2,t2,valid2 = normalisePoints(pts2)
-    if valid1 and valid2:
-        # construct A matrix for 8-norm
-        # Zisserman (pag 279)
-        A = np.zeros((numPoints,9))
-        for i in range(numPoints):
-            pt1,pt2 = normPts1[:,i],normPts2[:,i]
-            A[i] = [pt1[0]*pt2[0], pt1[1]*pt2[0], pt2[0],
-                    pt1[0]*pt2[1], pt1[1]*pt2[1], pt2[1],
-                           pt1[0],        pt1[1],      1]
-
-        # F is the smallest singular value of A
-        _,_,V = mySVD(A)
-        F = V[:, -1].reshape(3,3)
-        U,D,V = mySVD(F)
-        D[-1,-1] = 0
-        F = np.matmul(np.matmul(U,D),V.T)
-
-        # transform F back to the original scale
-        F = np.matmul(np.matmul(t2.T,F),t1)
-        # normalise F
-        F = F/np.linalg.norm(F)
-        if F[-1,-1] < 0: F = -F
-        print("Fund. Mat.\n", F.round(4))
-        erroReprojection(F,np.vstack((pts1.T,np.ones((1,pts1.shape[0])))),
-                   np.vstack((pts2.T,np.ones((1,pts2.shape[0])))))
-        return F,True
-    else:
-        return 0,False
 
 def decomposeEssentialMat(E,K1,K2,pts1,pts2):
     U,D,V = mySVD(E)
@@ -225,9 +193,6 @@ def decomposeEssentialMat(E,K1,K2,pts1,pts2):
     idx = numNegatives.argmin()
     R = Rs[idx]
     t = Ts[idx]
-    if numNegatives.min() > 0:
-        print('[ERROR] no valid rotation matrix')
-        return np.NaN,np.NaN
     #t = np.matmul(-t, R)
     return R,t
 
@@ -239,3 +204,68 @@ def myProjectionPoints(pts):
         projPt[1, i] = y
         i = i + 1
     return projPt
+
+def normalisePoints(pts):
+    # calculate origin centroid
+    center = np.mean(pts,axis=0)
+    # translate points to centroid
+    traslatedPts = pts - center
+    # calculate scale for the average point to be (1,1,1) >> homogeneous
+    meanDist2Center = np.mean(np.linalg.norm(traslatedPts,axis=1))
+    if meanDist2Center: # protect against division by zero
+        scale = np.sqrt(2)/meanDist2Center
+    else:
+        return pts, 0, False
+    
+    # compute translation matrix >> (x-x_c)*scale
+    T = np.diag((scale,scale,1))
+    T[0:2,2] = -scale*center
+
+    # transform in homogeneous coordinates
+    homogeneousPts = np.vstack((pts.T,np.ones((1,pts.shape[0]))))
+    normPoints = np.matmul(T,homogeneousPts)
+    return normPoints, T, True
+
+def erroReprojection(F,pts1,pts2):  # pts are Nx3 array of homogenous coordinates.  
+    # how well F satisfies the equation pt1 * F * pt2 == 0
+    vals = np.matmul(pts2.T,np.matmul(F,pts1))
+    err = np.abs(vals)
+    print("avg x'Fx=0:",np.mean(err))
+    print("max x'Fx=0:",np.max(err))
+    return np.mean(err)
+
+def estimateFundMatrix_8norm(pts1,pts2):
+    # get number of matched points
+    numPoints = pts1.shape[0]
+    # transform to normalized points
+    normPts1,t1,valid1 = normalisePoints(pts1) 
+    normPts2,t2,valid2 = normalisePoints(pts2)
+    if valid1 and valid2:
+        # construct A matrix for 8-norm
+        # Zisserman (pag 279)
+        A = np.zeros((numPoints,9))
+        for i in range(numPoints):
+            pt1 = normPts1[:,i]
+            pt2 = normPts2[:,i]
+            A[i] = [pt1[0]*pt2[0], pt1[1]*pt2[0], pt2[0],
+                    pt1[0]*pt2[1], pt1[1]*pt2[1], pt2[1],
+                           pt1[0],        pt1[1],      1]
+
+        # F is the smallest singular value of A
+        _,_,V = mySVD(A)
+        F = V[:, -1].reshape(3,3)
+        U,D,V = mySVD(F)
+        D[-1,-1] = 0
+        F = np.matmul(np.matmul(U,D),V.T)
+
+        # transform F back to the original scale
+        F = np.matmul(np.matmul(t2.T,F),t1)
+        # normalise F
+        F = F/np.linalg.norm(F)
+        if F[-1,-1] < 0: F = -F
+        print("Fund. Mat.\n", F.round(4))
+        erroReprojection(F,np.vstack((pts1.T,np.ones((1,pts1.shape[0])))),
+                   np.vstack((pts2.T,np.ones((1,pts2.shape[0])))))
+        return F,True
+    else:
+        return 0,False

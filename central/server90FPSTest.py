@@ -6,19 +6,19 @@ import threading
 warnings.filterwarnings("ignore")
 from functions import processCentroids_calib,map1_cam1,map1_cam2,map2_cam1,map2_cam2,cameraMatrix_cam1,cameraMatrix_cam2,distCoef_cam1,distCoef_cam2
 from cv2 import circle,putText,imshow,waitKey,FONT_HERSHEY_SIMPLEX,destroyAllWindows,triangulatePoints,moveWindow,imwrite
-from myLib import orderCenterCoord,getPreviousCentroid,estimateFundMatrix_8norm,decomposeEssentialMat,myProjectionPoints,isCollinear
+from myLib import orderCenterCoord,getPreviousCentroid,estimateFundMatrix_8norm,decomposeEssentialMat,myProjectionPoints,isCollinear,isEqual
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 class myServer(object):
     def __init__(self):
         # PLEASE CHANGE JUST THE VARIABLES BELOW
-        self.numberCameras,self.triggerTime,self.recTime = 2,5,4000
+        self.numberCameras,self.triggerTime,self.recTime = 2,5,1000
         print('[INFO] creating server')
         self.lock = threading.Lock()
         self.bufferSize,self.server_socket = 80,socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
         self.server_socket.bind(('0.0.0.0',8888))
-        self.data,self.verbose,self.addDic,self.myIPs,self.capture,self.FPS,self.match,self.myIPs,self.miss= [],False,{},(),np.ones(self.numberCameras,dtype=np.bool),90,[],[],0
+        self.data,self.verbose,self.addDic,self.myIPs,self.capture,self.FPS,self.match,self.myIPs,self.miss= [],False,{},(),np.ones(self.numberCameras,dtype=np.bool),40,[],[],0
         for i in range(self.numberCameras): self.data.append([])
 
     def connect(self):
@@ -45,7 +45,7 @@ class myServer(object):
                 if not (sizeMsg-1): self.capture[idx] = 0
 
                 if self.capture[idx]:
-                    if sizeMsg != 12:
+                    if sizeMsg != 10:
                         print('[ERROR] '+str(int((sizeMsg-4)/2))+' were found')
                         self.data[idx].append([0,0,0,0,0,0,0,0,False])
                     else:
@@ -71,16 +71,23 @@ class myServer(object):
                 valid = [row[8] for row in self.data[i]]
                 print('  >> camera '+str(i)+': '+str(int(np.sum(valid)))+' captured valid images images, address '+str(self.myIPs[i][0]))
             print('[RESULTS] missed '+str(int(self.miss))+' images')
-            #np.savetxt("cam1.csv",[row[0:6] for row in self.data[0]],delimiter =", ",fmt ='% s')
-            #np.savetxt("cam2.csv",[row[0:6] for row in self.data[1]],delimiter =", ",fmt ='% s')
+            np.savetxt("cam1.csv",[row[0:6] for row in self.data[0]],delimiter =", ",fmt ='% s')
+            np.savetxt("cam2.csv",[row[0:6] for row in self.data[1]],delimiter =", ",fmt ='% s')
     
     def order(self,idxBase=0,idxCompare=1):
         hasPrevious,centroids1,centroids2,invalid = False,[0],[0],0
+        R,t = np.genfromtxt('/home/debora/Desktop/calibResults/R.csv', delimiter=','),np.genfromtxt('/home/debora/Desktop/calibResults/t.csv', delimiter=',').reshape(-1,3)
+        lamb = np.genfromtxt('/home/debora/Desktop/calibResults/lamb.csv', delimiter=',')
+        P1,P2 = np.hstack((cameraMatrix_cam1, [[0.], [0.], [0.]])),np.matmul(cameraMatrix_cam2, np.hstack((R, t.T)))
         while len(self.match) or np.any(self.capture):
             if len(self.match):
                 imgNumber = self.match[0]
                 pts1,pts2 = np.array(self.data[idxBase][imgNumber][0:6]).reshape(-1,2),np.array(self.data[idxCompare][imgNumber][0:6]).reshape(-1,2)
-
+                if not np.all(pts1) or not np.all(pts2) or np.any(pts1<0) or np.any(pts2<0) or isEqual(pts1) or isEqual(pts2):
+                    print('invalid pts ',imgNumber)
+                    invalid+=1
+                    del self.match[0]
+                    continue
                 if isCollinear(*pts1) and isCollinear(*pts2):     
                     if invalid>=10: prev1,prev2 = [],[]           
                     else: prev1,prev2 = getPreviousCentroid(hasPrevious, centroids1[len(centroids1)-3:(len(centroids1))]),getPreviousCentroid(hasPrevious, centroids2[len(centroids2)-3:(len(centroids2))])
@@ -92,7 +99,7 @@ class myServer(object):
                     else:
                         centroids1,centroids2 = np.vstack((centroids1, sorted1)),np.vstack((centroids2, sorted2))
 
-                    hasPrevious = True
+                    hasPrevious,invalid = True,0
                     print('matched ',imgNumber)
 
                     if self.verbose:
@@ -103,9 +110,9 @@ class myServer(object):
                             putText(img,str(k),(int(center[0]/16)-25, int(center[1]/16)-25),FONT_HERSHEY_SIMPLEX,0.5,(255,0,0),2) 
                             k+=1
                         imshow(str(idxBase),img)
+                        moveWindow(str(idxBase), 0,10);
                         waitKey(1)
                         #imwrite(str(idxBase)+'/'+str(k).zfill(4)+'.jpg')
-
                         img,k = np.ones((480,640,3))*25,0
                         for pt in sorted2:
                             center = (int(np.round(pt[0]*16)), int(np.round(pt[1]*16)))
@@ -114,20 +121,17 @@ class myServer(object):
                             k+=1
                         imshow(str(idxCompare),img)
                         waitKey(1)
-                        moveWindow(str(idxCompare), 400,10);
+                        moveWindow(str(idxCompare), 700,10);
                         #imwrite(str(idxCompare)+'/'+str(k).zfill(4)+'.jpg')
-                else: print('non collinear ', imgNumber)
+                else: 
+                    print('non collinear ', imgNumber)
+                    invalid+=1
                 del self.match[0]
         
 
-        #np.savetxt("centroids1.csv",centroids1,delimiter =", ",fmt ='% s')
-        #np.savetxt("centroids2.csv",centroids2,delimiter =", ",fmt ='% s')
+        np.savetxt("centroids1.csv",centroids1,delimiter =", ",fmt ='% s')
+        np.savetxt("centroids2.csv",centroids2,delimiter =", ",fmt ='% s')
 
-
-        print("\n")
-        R = np.genfromtxt('R.csv', delimiter=',')
-        t = np.genfromtxt('t.csv', delimiter=',')
-        P1,P2 = np.hstack((cameraMatrix_cam1, [[0.], [0.], [0.]])),np.matmul(cameraMatrix_cam2, np.hstack((R, t.T)))
         projPt1,projPt2 = myProjectionPoints(np.array(centroids1)),myProjectionPoints(np.array(centroids2))
 
         points4d = triangulatePoints(P1.astype(float),
@@ -138,23 +142,15 @@ class myServer(object):
 
         if points3d[0, 2] < 0: points3d = -points3d
 
-        print("\nRot. Mat.\n", R.round(4))
-        print("\nTrans. Mat.\n", t.round(4))
-
-        tot,L_real_AC,L_real_AB,L_real_BC,L_AC_vec,L_BC_vec,L_AB_vec,k = 0,15.7,10.4,5.3,[],[],[],0
+        L_real_AC,L_real_AB,L_real_BC,L_AC_vec,L_BC_vec,L_AB_vec = 15.7,10.2,5.5,[],[],[]
         for [A, B, C] in points3d.reshape([-1, 3, 3]):
-            L_rec_AC,L_rec_BC,L_rec_AB = np.linalg.norm(A-C),np.linalg.norm(B-C),np.linalg.norm(A-B)
+            L_rec_AC = np.linalg.norm(A-C)
+            L_rec_BC = np.linalg.norm(B-C)
+            L_rec_AB = np.linalg.norm(A-B)
             if L_rec_AB<L_rec_BC: L_rec_AB,L_rec_BC=L_rec_BC,L_rec_AB
-            tot = tot + L_real_AC/L_rec_AC + L_real_BC/L_rec_BC + L_real_AB/L_rec_AB
-            if k:
-                if abs(L_rec_AB*lamb-L_real_AB)>1 or abs(L_rec_AC*lamb-L_real_AC)>1 or abs(L_rec_BC*lamb-L_real_BC)>1:
-                    continue
-            k = k + 3
-            lamb = tot/k
             L_AC_vec.append(L_rec_AC)
             L_BC_vec.append(L_rec_BC)
             L_AB_vec.append(L_rec_AB)
-
 
         print('Scale between real world and triang. point cloud is: ', lamb.round(2))
         print('L_AC >> mean = ' + str((np.mean(L_AC_vec)*lamb).round(4)) +
@@ -182,16 +178,6 @@ class myServer(object):
         plt.xlim(0,len(L_AC_vec)-1)
         plt.draw()
         plt.show()
-
-        points3d_new = points3d*lamb
-        i = 0
-        for [A, B, C] in points3d_new.reshape([-1, 3, 3]):
-            L_reconst = np.sqrt(np.sum((A-C)**2, axis=0))
-            valid = abs(L_real_AC-L_reconst)/L_real_AC < 0.01
-            if not valid:
-                i = i + 1
-        print("Images distant more than 1% from the real value = " +
-            str(i)+'/'+str(int(points3d.shape[0]/3)))
 
         fig = plt.figure(figsize=(8, 8))
         ax = plt.axes(projection='3d')
