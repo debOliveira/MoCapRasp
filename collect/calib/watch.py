@@ -30,7 +30,9 @@ frames=[]
 UDPSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 
 def imageProcessing():
-    counter=0
+    counter=0                
+    bitsShift = 4
+    constMultiplier = 16
     while True:
         try:
             start=time.time()
@@ -43,10 +45,10 @@ def imageProcessing():
             yMin,yMax=min(coord[0]),max(coord[0])
             keypoints = detector.detect(cv2.bitwise_not(cv2.blur(img[xMin-10:xMax+10,yMin-10:yMax+10],(3,3)))) 
             N = np.array(keypoints).shape[0]
-            msg = np.zeros(10)
-            for i in range(3): 
-                msg[i<<1],msg[(i<<1)+1]=keypoints[i].pt[0],keypoints[i].pt[1]
-            msg[6],msg[7],msg[8],msg[9]= xMin,yMin,start,counter
+            msg = np.zeros(N*3+4)
+            for i in range(N): 
+                msg[(i<<1)+i],msg[(i<<1)+i+1],msg[(i<<1)+i+2]=keypoints[i].pt[0],keypoints[i].pt[1],keypoints[i].size
+            msg[-4],msg[-3],msg[-2],msg[-1]= xMin,yMin,start,counter
             UDPSocket.sendto(msg.tobytes(),("192.168.0.104", 8888))
             times.append(time.time()-start)
         except GeneratorExit: return
