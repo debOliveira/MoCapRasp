@@ -2,24 +2,13 @@ import numpy as np
 from sklearn import linear_model
 
 def isCollinear(p0, p1, p2):
-    X = [[p0[0]], [p1[0]], [p2[0]]]             # X coordinated of all centers
-    y = [p0[1], p1[1], p2[1]]                   # Y coordinated of all centers
-    
+    X,y = [[p0[0]],[p1[0]],[p2[0]]],[p0[1], p1[1], p2[1]]      
     reg = linear_model.LinearRegression()       # create LS model
-    reg.fit(X, y)                               # fit model
-    
-    a3 = reg.coef_                              # get line coeficient A
-    b3 = reg.intercept_                         # get line coeficient B
-
-    y0_LS = abs(int(a3*p0[0] + b3 - p0[1]))     # find residual between y and 
-    y1_LS = abs(int(a3*p1[0] + b3 - p1[1]))     # the coordinates Y on the LS line
-    y2_LS = abs(int(a3*p2[0] + b3 - p2[1]))
-    
-    m = (y0_LS + y1_LS + y2_LS)/3               # get mean value of error
-
-    # if it is less than 1 pixel, they are collinear
+    reg.fit(X, y)                               # fit model    
+    a3,b3 = reg.coef_,reg.intercept_   
+    y0_LS,y1_LS,y2_LS = abs(int(a3*p0[0] + b3 - p0[1])),abs(int(a3*p1[0] + b3 - p1[1])),abs(int(a3*p2[0] + b3 - p2[1]))     
+    m = (y0_LS + y1_LS + y2_LS)/3
     res = (m < 1)
-
     return res
 
 def isEqual(pt):
@@ -28,46 +17,33 @@ def isEqual(pt):
     return min(AB,AC,BC)<2
 
 def getPreviousCentroid(noPrevious, lastCentroid):
-    if not noPrevious:
-        return []
-    else:
-        return lastCentroid
+    if not noPrevious: return []
+    else: return lastCentroid
 
 def reshapeCoord(coord):
     # first reshape array of coordinates
     coordCopy = np.array(coord).reshape(6)
     # get the Y coordinates of each markers' center
-    coordX = [coordCopy[0], coordCopy[2], coordCopy[4]]
-    coordY = [coordCopy[1], coordCopy[3], coordCopy[5]]
+    coordX,coordY = [coordCopy[0], coordCopy[2], coordCopy[4]],[coordCopy[1], coordCopy[3], coordCopy[5]]
     return coordX,coordY
 
 def getOrder(centerX,centerY, baseAxis=False, axis = 1):
     # get wand direction
-    distY = np.array(centerY).max() - np.array(centerY).min()
-    distX = np.array(centerX).max() - np.array(centerX).min()   
+    distY,distX = np.array(centerY).max() - np.array(centerY).min(),np.array(centerX).max() - np.array(centerX).min()  
     # define the order of the markers 
     if not baseAxis:  #if there is no axis to compare, get maximum dist
-        if distY > distX:
-            order = np.argsort(centerY)
-            axis = 1
-        else:
-            order = np.argsort(centerX)
-            axis = 0
+        if distY > distX: order,axis = np.argsort(centerY),1
+        else: order,axis = np.argsort(centerX),0
     else:  # if there is a previous frame, compare to its axis
-        if axis:
-            order = np.argsort(centerY)
-        else:
-            order = np.argsort(centerX)
+        if axis: order = np.argsort(centerY)
+        else: order = np.argsort(centerX)
     return order, axis
 
 
 def getSignal(num1, num2, tol=10**(-6)):
-    if abs(num1-num2) <= tol:
-        return 0,False
-    if (num1-num2) < 0:
-        return -1,True
-    else:
-        return 1,True
+    if abs(num1-num2) <= tol: return 0,False
+    if (num1-num2) < 0:  return -1,True
+    else: return 1,True
 
 def swapElements(arr, idx1, idx2):
     aux = arr[idx1]
@@ -79,15 +55,11 @@ def findNearestC(nearestA, nearestB): # get the numer missing from the array [0,
     vec = np.array([nearestA, nearestB])
     is0, = np.where(vec == 0)
     is1, = np.where(vec == 1)
-    is0 = len(is0)
-    is1 = len(is1)
+    is0,is1 = len(is0), len(is1)
     if is0:
-        if is1:
-            return 2
-        else:
-            return 1
-    else:
-        return 0
+        if is1: return 2
+        else: return 1
+    else: return 0
 
 def orderCenterCoord(centerCoord, prevCenterCoord, otherCamOrder = 0):
     centerX, centerY = reshapeCoord(centerCoord)
@@ -99,12 +71,12 @@ def orderCenterCoord(centerCoord, prevCenterCoord, otherCamOrder = 0):
         # if it is the second camera
         if otherCamOrder != 0:  
             # if the markers are wrong, swap the extremities
-            signal, valid = getSignal(centerY[order[0]], centerY[order[2]],5)
+            signal, valid = getSignal(centerX[order[0]], centerX[order[2]],5)
             if signal != otherCamOrder and valid:
                 order = swapElements(order, 0, 2)    
         else:        
             # get base for comparision (first camera only)        
-            otherCamOrder,_ = getSignal(centerY[order[0]], centerY[order[2]])
+            otherCamOrder,_ = getSignal(centerX[order[0]], centerX[order[2]])
 
         # sort centers        
         sortedCenterCoord = np.array((centerCoord[order[0]], centerCoord[order[1]], centerCoord[order[2]]))
@@ -171,16 +143,11 @@ def decomposeEssentialMat(E,K1,K2,pts1,pts2):
 
     for i in range(0,Ts.shape[0]):
         P2 = np.matmul(K2,np.hstack((Rs[i],Ts[i].T)))
-        M1 = P1[0:3, 0:3]
-        M2 = P2[0:3, 0:3]   
-        c1 = np.matmul(-np.linalg.inv(M1),P1[0:3,3])
-        c2 = np.matmul(-np.linalg.inv(M2),P2[0:3,3])
-        u1 = np.vstack((pts1.T,np.ones((1,numPoints))))
-        u2 = np.vstack((pts2.T,np.ones((1,numPoints))))
-        y = c2 - c1;
-        a1 = np.matmul(np.linalg.inv(M1),u1)
-        a2 = np.matmul(np.linalg.inv(M2),u2)
-        points3D = np.zeros((numPoints,3))
+        M1,M2 = P1[0:3, 0:3],P2[0:3, 0:3]
+        c1,c2 = np.matmul(-np.linalg.inv(M1),P1[0:3,3]),np.matmul(-np.linalg.inv(M2),P2[0:3,3])
+        u1,u2 = np.vstack((pts1.T,np.ones((1,numPoints)))),np.vstack((pts2.T,np.ones((1,numPoints))))
+        a1,a2 = np.matmul(np.linalg.inv(M1),u1),np.matmul(np.linalg.inv(M2),u2)
+        points3D,y = np.zeros((numPoints,3)),c2 - c1
         for k in range(0,numPoints):
             A = np.hstack((a1[:,k].reshape(3,1),-a2[:,k].reshape(3,1)))
             alpha = np.matmul(np.linalg.pinv(A),y)
@@ -193,15 +160,16 @@ def decomposeEssentialMat(E,K1,K2,pts1,pts2):
     idx = numNegatives.argmin()
     R = Rs[idx]
     t = Ts[idx]
+    if numNegatives.min() > 0:
+        print('[ERROR] no valid rotation matrix')
+        return np.NaN,np.NaN
     #t = np.matmul(-t, R)
     return R,t
 
 def myProjectionPoints(pts):
-    projPt = np.zeros((2, len(pts)))
-    i = 0
+    projPt,i = np.zeros((2, len(pts))),0
     for [x, y] in pts:
-        projPt[0, i] = x
-        projPt[1, i] = y
+        projPt[0, i],projPt[1, i] = x,y
         i = i + 1
     return projPt
 
