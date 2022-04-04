@@ -31,12 +31,10 @@ UDPSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 
 def imageProcessing():
     counter=0                
-    bitsShift = 4
-    constMultiplier = 16
     while True:
         try:
             start=time.time()
-            img = (yield)
+            img,ts = (yield)
             counter+=1
             img = img[:,0:639] #40FPS
             _,thresh = cv2.threshold(img,127,255,cv2.THRESH_BINARY)
@@ -48,7 +46,7 @@ def imageProcessing():
             msg = np.zeros(N*3+4)
             for i in range(N): 
                 msg[(i<<1)+i],msg[(i<<1)+i+1],msg[(i<<1)+i+2]=keypoints[i].pt[0],keypoints[i].pt[1],keypoints[i].size
-            msg[-4],msg[-3],msg[-2],msg[-1]= xMin,yMin,start,counter
+            msg[-4],msg[-3],msg[-2],msg[-1]= xMin,yMin,ts,counter
             UDPSocket.sendto(msg.tobytes(),("192.168.0.104", 8888))
             times.append(time.time()-start)
         except GeneratorExit: return
@@ -84,18 +82,22 @@ class Handler(FileSystemEventHandler):
     counter = 0  
     coRout = imageProcessing()
     coRout.__next__()
+    lastImg = ''
     
     @staticmethod
     def on_any_event(event):
         if event.is_directory:
             return None       
         elif event.event_type == 'created':
-            #print("Watchdog received created event - % s." % event.src_path[10:-4])
+            #print("Watchdog received created event - % s." % event.src_path)
             if Handler.counter:
-                img = cv2.imread('/dev/shm/'+str(Handler.counter-1).zfill(4)+'.bmp',cv2.IMREAD_GRAYSCALE)
-                if img is not None: Handler.coRout.send(img)
-                os.remove('/dev/shm/'+str(Handler.counter-1).zfill(4)+'.bmp')
+                name = Handler.lastImg
+                img = cv2.imread('/dev/shm/'+name+'.bmp',cv2.IMREAD_GRAYSCALE)
+                if img is not None: Handler.coRout.send((img,int(name)))
+                os.remove('/dev/shm/'+name+'.bmp')
+            Handler.lastImg = event.src_path[-13:-4]
             Handler.counter+=1
+                    
                     
 if __name__ == '__main__':
     watch = OnMyWatch()

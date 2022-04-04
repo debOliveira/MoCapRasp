@@ -17,13 +17,7 @@ N_frames = 0
 (w,h) = (640,480)
 bytesPerFrame = w * h
 fps = 40 # setting to 250 will request the maximum framerate possible
-
-# "raspividyuv" is the command that provides camera frames in YUV format
-#  "--output -" specifies stdout as the output
-#  "--timeout 0" specifies continuous video
-#  "--luma" discards chroma channels, only luminance is sent through the pipeline
-# see "raspividyuv --help" for more information on the parameters
-videoCmd = "raspividyuv -w "+str(w)+" -h "+str(h)+" --output - --timeout 0 --framerate "+str(fps)+" --luma -awb off --awbgains 1.3,1.8 -ag 8 -dg 1.5 "
+videoCmd = "./raspividyuv -w "+str(w)+" -h "+str(h)+" --output - --timeout 0 --framerate "+str(fps)+" --luma -awb off --awbgains 1.3,1.8 -ag 8 -dg 1.5 -pts -"
 videoCmd = videoCmd.split() # Popen requires that each parameter is a separate string
 
 print('[INFO] connecting to server')
@@ -40,10 +34,6 @@ print('[INFO] delay in sec: ',now-start)
 
 cameraProcess = sp.Popen(videoCmd, stdout=sp.PIPE) # start the camera
 atexit.register(cameraProcess.terminate) # this closes the camera process in case the python scripts exits unexpectedly
-
-# wait for the first frame and discard it (only done to measure time more accurately)
-rawStream = cameraProcess.stdout.read(bytesPerFrame)
-
 print("RECORDING ...")
 
 start_time = time.time()
@@ -56,23 +46,13 @@ while True:
         print("Error: Camera stream closed unexpectedly")
         break
     frame.shape = (h,w) # set the correct dimensions for the numpy array
-
-    # The frame can be processed here using any function in the OpenCV library.
-
-    # Full image processing will slow down the pipeline, so the requested FPS should be set accordingly.
-    #frame = cv2.Canny(frame, 50,150)
-    
-    # For instance, in this example you can enable the Canny edge function above.
-    # You will see that the frame rate drops to ~35fps and video playback is erratic.
-    # If you then set fps = 30 at the beginning of the script, there will be enough cycle time between frames to provide accurate video.
-    cv2.imwrite('/dev/shm/'+str(N_frames).zfill(4)+'.bmp',frame)
+    ts = np.array(cameraProcess.stdout.read(9).decode("utf-8"), dtype="U9")
+    cv2.imwrite('/dev/shm/'+str(ts)+'.bmp',frame)
     # One optimization could be to work with a decimated (downscaled) version of the image: deci = frame[::2, ::2]
-    
-    frames.append(frame) # save the frame (for the demo)
-    #del frame # free the allocated memory
+    #frames.append(frame) # save the frame (for the demo)
+    del frame,ts # free the allocated memory
     N_frames += 1
-    if N_frames > max_frames: break
-
+    if N_frames == max_frames: break
 end_time = time.time()
 
 cameraProcess.terminate() # stop the camera
