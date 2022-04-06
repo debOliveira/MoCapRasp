@@ -35,7 +35,6 @@ def imageProcessing():
         try:
             start=time.time()
             img,ts = (yield)
-            counter+=1
             img = img[:,0:639] #40FPS
             _,thresh = cv2.threshold(img,127,255,cv2.THRESH_BINARY)
             coord = cv2.findNonZero(thresh).reshape(-1,2).T
@@ -49,6 +48,7 @@ def imageProcessing():
             msg[-4],msg[-3],msg[-2],msg[-1]= xMin,yMin,ts,counter
             UDPSocket.sendto(msg.tobytes(),("192.168.0.104", 8888))
             times.append(time.time()-start)
+            counter+=1
         except GeneratorExit: return
         except: continue
           
@@ -107,9 +107,9 @@ if __name__ == '__main__':
         print('[RESULTS] processing with '+str(round(1/np.mean(times),2))+'FPS')
         print('[RESULTS] '+str(len(times))+' valid images')
     else: print('[RESULTS] no valid images captured')
-    print("Display frames with OpenCV...")
+    '''print("Display frames with OpenCV...")
     for frame in frames:
         cv2.imshow("Slow Motion", frame)
         cv2.waitKey(10) # request maximum refresh rate
 
-    cv2.destroyAllWindows()
+    cv2.destroyAllWindows()'''
