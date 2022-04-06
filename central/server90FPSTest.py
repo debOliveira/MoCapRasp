@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from nis import match
 import socket,time
 import numpy as np
@@ -9,17 +10,21 @@ from cv2 import circle,putText,imshow,waitKey,FONT_HERSHEY_SIMPLEX,destroyAllWin
 from myLib import orderCenterCoord,getPreviousCentroid,estimateFundMatrix_8norm,decomposeEssentialMat,myProjectionPoints,isCollinear,isEqual
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from scipy.interpolate import interp1d
+import pandas as pd
+import math
 
 class myServer(object):
     def __init__(self):
         # PLEASE CHANGE JUST THE VARIABLES BELOW
-        self.numberCameras,self.triggerTime,self.recTime = 2,5,1000
+        self.numberCameras,self.triggerTime,self.recTime,self.step = 2,2,5,0.01
         print('[INFO] creating server')
         self.lock = threading.Lock()
         self.bufferSize,self.server_socket = 1024,socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
         self.server_socket.bind(('0.0.0.0',8888))
-        self.data,self.verbose,self.addDic,self.myIPs,self.capture,self.FPS,self.match,self.myIPs,self.miss= [],False,{},(),np.ones(self.numberCameras,dtype=np.bool),40,[],[],0
+        self.data,self.verbose,self.addDic,self.capture,self.match,self.myIPs,self.miss= [],False,{},np.ones(self.numberCameras,dtype=np.bool),[],[],0
         for i in range(self.numberCameras): self.data.append([])
+        self.baseDict,self.df = {'ts':np.linspace(0,self.recTime,int(self.recTime/self.step)+1)},[]
 
     def connect(self):
         print("[INFO] server running, waiting for clients")
@@ -27,16 +32,29 @@ class myServer(object):
             _,address = self.server_socket.recvfrom(self.bufferSize)
             self.addDic[address[0]]=i
             self.myIPs.append(address)
+            self.baseDict[address[0]+'-AX']=np.zeros(int(self.recTime/self.step)+1)
+            self.baseDict[address[0]+'-BX']=np.zeros(int(self.recTime/self.step)+1)
+            self.baseDict[address[0]+'-CX']=np.zeros(int(self.recTime/self.step)+1)
+            self.baseDict[address[0]+'-AY']=np.zeros(int(self.recTime/self.step)+1)
+            self.baseDict[address[0]+'-BY']=np.zeros(int(self.recTime/self.step)+1)
+            self.baseDict[address[0]+'-CY']=np.zeros(int(self.recTime/self.step)+1)
             print('[INFO] client '+str(len(self.addDic))+' connected at '+str(address[0]))
         print('[INFO] all clients connected')
         self.triggerTime += time.time()
         for i in range(self.numberCameras):
             self.server_socket.sendto((str(self.triggerTime)+' '+str(self.recTime)).encode(),tuple(self.myIPs[i]))
         print('[INFO] trigger sent')
-    
+        self.df = pd.DataFrame(data=self.baseDict)
+
+    def myInterpol(self,t,x,tNew):
+        ff = interp1d(t, x, kind='cubic')
+        return ff(tNew*self.step)
+
     def collect(self):
         print('[INFO] waiting capture')
         try:
+            counter,lastTime,lastInterp = np.zeros(self.numberCameras,dtype=np.uint16),np.zeros(self.numberCameras),np.zeros(self.numberCameras)
+            invalid = np.zeros(self.numberCameras,dtype=np.uint8)
             while np.any(self.capture):
                 bytesPair = self.server_socket.recvfrom(self.bufferSize)
                 message = np.frombuffer(bytesPair[0],dtype=np.float64)
@@ -45,55 +63,100 @@ class myServer(object):
                 if not (sizeMsg-1): self.capture[idx] = 0
 
                 if self.capture[idx]:
-                    if sizeMsg < 13:
-                        print('[ERROR] '+str(int((sizeMsg-4)/3))+' were found')
-                        self.data[idx].append([0,0,0,0,0,0,0,0,False])
-                    else:
+                    if sizeMsg < 13: # if less than 3 blobs, discard
+                        print('[ERROR] '+str(int((sizeMsg-4)/3))+' markers were found')
+                        invalid[idx]+=1
+                    else: 
                         msg = message[0:sizeMsg-4].reshape(-1,3)
                         coord,size = msg[:,0:2],msg[:,2].reshape(-1)
-                        if sizeMsg > 13:
+                        # if more than 3 blobs are found, get the four bigger
+                        if sizeMsg > 13: 
                             orderAscDiameters = np.argsort(size)
                             coord = np.array([coord[orderAscDiameters[-1]],coord[orderAscDiameters[-2]],coord[orderAscDiameters[-3]]]).reshape(-1,2)
-
-                        a,b,time,imgNumber = message[-4],message[-3],message[-2],int(message[-1])
-                        if address[0] == '192.168.0.102': undCoord = processCentroids_calib(coord,a,b,cameraMatrix_cam1,distCoef_cam1)
+                        # store message parameters
+                        a,b,time,imgNumber = message[-4],message[-3],message[-2],int(message[-1]) 
+                        # undistort points
+                        if address[0] == '192.168.0.103': undCoord = processCentroids_calib(coord,a,b,cameraMatrix_cam1,distCoef_cam1)
                         else: undCoord = processCentroids_calib(coord,a,b,cameraMatrix_cam2,distCoef_cam2)
-
+                        # check if there is an obstruction between the blobs
                         for [A,B,C] in undCoord.reshape([-1, 3, 2]):
-                            if np.linalg.norm(A-B)<(size[0]+size[1])/2 or np.linalg.norm(A-C)<(size[0]+size[2])/2 or np.linalg.norm(B-C)<(size[1]+size[2])/2:
-                                self.data[idx].append([0,0,0,0,0,0,0,0,False])
-                                print('bigg diam')
+                            if np.linalg.norm(A-B)<(size[0]+size[1])/2 or np.linalg.norm(A-C)<(size[0]+size[2])/2 or np.linalg.norm(B-C)<(size[1]+size[2])/2: 
+                                print('occlusion')
+                                invalid[idx]+=1
                                 continue
+                        
+                        # if ts if not read corectly
+                        if counter[idx]:
+                            if time-lastTime[idx]>1e7: 
+                                print('time missmatch')
+                                invalid[idx]+=1
+                                continue
+                        # order markers
+                        if isCollinear(*undCoord) and not isEqual(undCoord):     
+                            if invalid[idx]>=10 or not counter[idx]: prev = []        
+                            else: prev = np.array(self.data[idx][-1][0:6]).reshape(1,-2)
+                            undCoord, _ = orderCenterCoord(undCoord,prev)
+                            undCoord = np.array(undCoord)
+                        else: 
+                            print('not collinear')
+                            invalid[idx]+=1
+                            continue
+                        # here?
+                        self.data[idx].append(np.concatenate((undCoord.reshape(6),[time,imgNumber])))
+                        counter[idx]+=1
+                        lastTime[idx]=time
+                        # interpolate
+                        if not counter[idx]%10: 
+                            if counter[idx]>10: pts = np.array(self.data[idx][-11:])  
+                            else: pts = np.array(self.data[idx][-10:])                        
+                            coord,time = pts[:,0:6],pts[:,6]/1e6
+                            lowBound,highBound = math.ceil(time[0]/self.step),math.floor(time[-1]/self.step)
+                            tNew = np.linspace(lowBound,highBound,int((highBound-lowBound))+1)
+                            self.df[address[0]+'-AX'][tNew] = self.myInterpol(time,coord[:,0],tNew)
+                            '''self.df[address[0]+'-BX'][tNew] = self.myInterpol(time,coord[:,2],tNew)
+                            self.df[address[0]+'-CX'][tNew] = self.myInterpol(time,coord[:,4],tNew)
+                            self.df[address[0]+'-AY'][tNew] = self.myInterpol(time,coord[:,1],tNew)
+                            self.df[address[0]+'-BY'][tNew] = self.myInterpol(time,coord[:,3],tNew)
+                            self.df[address[0]+'-CY'][tNew] = self.myInterpol(time,coord[:,5],tNew)
+                            print(idx,'-',tNew[0],tNew[-1],'/',time[0],time[-1],'/',counter[idx])
+                            lastInterp[idx] = tNew[-1]
+                            if lastInterp[idx] >= lastInterp[int(not idx)]: 
+                                print(lastInterp[idx],lastInterp[int(not idx)])
+                                for i in range(len(match)-1,lastInterp[idx]+1): #self.match.append(i)
+                                    print(i)'''
 
-                        if len(self.data[idx])>imgNumber: self.data[idx][imgNumber] = np.concatenate((undCoord.reshape(6),[time,imgNumber,True]))
-                        elif len(self.data[idx])==imgNumber: self.data[idx].append(np.concatenate((undCoord.reshape(6),[time,imgNumber,True])))
-                        else:
-                            for i in range(imgNumber-len(self.data[idx])): self.data[idx].append([0,0,0,0,0,0,0,0,False])
-                            self.data[idx].append(np.concatenate((undCoord.reshape(6),[time,imgNumber,True])))
-
-                        idxCompare = int(not(idx))
-                        if len(self.data[idxCompare])>=imgNumber+1: 
-                            if self.data[idx][imgNumber][8] and self.data[idxCompare][imgNumber][8]: self.match.append(imgNumber)                                
-                            else: self.miss+=1
         finally:
             self.server_socket.close()
             destroyAllWindows()
             print('[RESULTS] server results are')
             for i in range(self.numberCameras): 
-                valid = [row[8] for row in self.data[i]]
-                print('  >> camera '+str(i)+': '+str(int(np.sum(valid)))+' captured valid images images, address '+str(self.myIPs[i][0]))
+                print('  >> camera '+str(i)+': '+str(len(self.data[i]))+' captured valid images images, address '+str(self.myIPs[i][0]))
             print('[RESULTS] missed '+str(int(self.miss))+' images')
-    
+            print(self.df)
+            for i in range(self.numberCameras): 
+                fig,axs = plt.subplots(3, 2,figsize=(6,8),dpi=200)
+                axs[0,0].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,0], 'o', self.df['ts'], self.df[self.myIPs[i][0]+'-AX'], '-')
+                axs[0,1].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,1], 'o', self.df['ts'], self.df[self.myIPs[i][0]+'-AY'], '-')
+                axs[1,0].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,2], 'o', self.df['ts'], self.df[self.myIPs[i][0]+'-BX'], '-')
+                axs[1,1].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,3], 'o', self.df['ts'], self.df[self.myIPs[i][0]+'-BY'], '-')
+                axs[2,0].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,4], 'o', self.df['ts'], self.df[self.myIPs[i][0]+'-CX'], '-')
+                axs[2,1].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,5], 'o', self.df['ts'], self.df[self.myIPs[i][0]+'-CY'], '-')
+                plt.show()
+        
     def order(self,idxBase=0,idxCompare=1):
         hasPrevious,centroids1,centroids2,invalid = False,[0],[0],0
-        R,t = np.genfromtxt('/home/debora/Desktop/calibResults/R.csv', delimiter=','),np.genfromtxt('/home/debora/Desktop/calibResults/t.csv', delimiter=',').reshape(-1,3)
-        lamb = np.genfromtxt('/home/debora/Desktop/calibResults/lamb.csv', delimiter=',')
-        P1,P2 = np.hstack((cameraMatrix_cam1, [[0.], [0.], [0.]])),np.matmul(cameraMatrix_cam2, np.hstack((R, t.T)))
+        #R,t = np.genfromtxt('/home/debora/Desktop/calibResults/R.csv', delimiter=','),np.genfromtxt('/home/debora/Desktop/calibResults/t.csv', delimiter=',').reshape(-1,3)
+        #lamb = np.genfromtxt('/home/debora/Desktop/calibResults/lamb.csv', delimiter=',')
+        #P1,P2 = np.hstack((cameraMatrix_cam1, [[0.], [0.], [0.]])),np.matmul(cameraMatrix_cam2, np.hstack((R, t.T)))
         while len(self.match) or np.any(self.capture):
             if len(self.match):
-                imgNumber = self.match[0]
-                pts1,pts2 = np.array(self.data[idxBase][imgNumber][0:6]).reshape(-1,2),np.array(self.data[idxCompare][imgNumber][0:6]).reshape(-1,2)
-                if not np.all(pts1) or not np.all(pts2) or np.any(pts1<0) or np.any(pts2<0) or isEqual(pts1) or isEqual(pts2):
+                imgNumber = int(self.match[0])
+                pts = self.df.loc[imgNumber].to_numpy()
+                #print(pts)
+                #pts1,pts2 = pts[1:7],pts[7:13]
+                #print(imgNumber,np.all(pts1),np.all(pts2),np.any(pts2<0),isEqual(pts2))
+                #print(pts1,pts2)
+                '''if not np.all(pts1) or not np.all(pts2) or np.any(pts1<0) or np.any(pts2<0) or isEqual(pts1) or isEqual(pts2):
                     print('invalid pts ',imgNumber)
                     invalid+=1
                     del self.match[0]
@@ -135,11 +198,11 @@ class myServer(object):
                         #imwrite(str(idxCompare)+'/'+str(k).zfill(4)+'.jpg')
                 else: 
                     print('non collinear ', imgNumber)
-                    invalid+=1
+                    invalid+=1'''
                 del self.match[0]
         
 
-        projPt1,projPt2 = myProjectionPoints(np.array(centroids1)),myProjectionPoints(np.array(centroids2))
+        '''projPt1,projPt2 = myProjectionPoints(np.array(centroids1)),myProjectionPoints(np.array(centroids2))
 
         points4d = triangulatePoints(P1.astype(float),
                                         P2.astype(float),
@@ -247,14 +310,14 @@ class myServer(object):
         plt.gca().invert_zaxis()
         ax.get_proj = lambda: np.dot(Axes3D.get_proj(ax), np.diag([1., 1., .3, 1.]))
         plt.draw()
-        plt.show()
+        plt.show()'''
 
 
 myServer_ = myServer()
 tCollect = threading.Thread(target=myServer_.collect, args=[])
-tOrder = threading.Thread(target=myServer_.order, args=[])
-tOrder.start()
+#tOrder = threading.Thread(target=myServer_.order, args=[])
+#tOrder.start()
 myServer_.connect()
 tCollect.start()
 tCollect.join()
-tOrder.join()
+#tOrder.join()
