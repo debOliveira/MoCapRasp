@@ -130,14 +130,40 @@ class myServer(object):
             destroyAllWindows()
             print('[RESULTS] server results are')
             for i in range(self.numberCameras): print('  >> camera '+str(i)+': '+str(len(self.data[i]))+' captured valid images images, address '+str(self.myIPs[i][0])+', missed '+str(int(invalid[i]))+' images')
-            for i in range(self.numberCameras): 
-                _,axs = plt.subplots(3, 2,figsize=(6,8),dpi=200)
-                axs[0,0].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,0], 'o', self.df[:,-1], self.df[:,i*6], '-')
-                axs[0,1].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,1], 'o', self.df[:,-1], self.df[:,i*6+1], '-')
-                axs[1,0].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,2], 'o', self.df[:,-1], self.df[:,i*6+2], '-')
-                axs[1,1].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,3], 'o', self.df[:,-1], self.df[:,i*6+3], '-')
-                axs[2,0].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,4], 'o', self.df[:,-1], self.df[:,i*6+4], '-')
-                axs[2,1].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,5], 'o', self.df[:,-1], self.df[:,i*6+5], '-')
+            for i in range(self.numberCameras):       
+                _,axs = plt.subplots(3, 2,figsize=(10,20),dpi=100)
+                axs[0,0].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,0], 'o',label='40 FPS') 
+                axs[0,0].plot(self.df[:,-1], self.df[:,i*6], '-',label='100 FPS interpolation')
+                axs[0,0].set_ylabel('X - marker #0 (px)')
+                axs[0,0].grid()
+
+                axs[0,1].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,1], 'o',label='40 FPS') 
+                axs[0,1].plot( self.df[:,-1], self.df[:,i*6+1], '-',label='100 FPS interpolation')
+                axs[0,1].set_ylabel('Y - marker #0 (px)')
+                axs[0,1].grid()
+
+                axs[1,0].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,2], 'o',label='40 FPS') 
+                axs[1,0].plot( self.df[:,-1], self.df[:,i*6+2], '-',label='100 FPS interpolation')
+                axs[1,0].set_ylabel('X - marker #1 (px)')
+                axs[1,0].grid()
+
+                axs[1,1].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,3], 'o',label='40 FPS') 
+                axs[1,1].plot(self.df[:,-1], self.df[:,i*6+3], '-',label='100 FPS interpolation')
+                axs[1,1].set_ylabel('X - marker #1 (px)')
+                axs[1,1].grid()
+
+                axs[2,0].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,4], 'o',label='40 FPS') 
+                axs[2,0].plot(  self.df[:,-1], self.df[:,i*6+4], '-',label='100 FPS interpolation')
+                axs[2,0].set_xlabel('t (seconds)')
+                axs[2,0].set_ylabel('X - marker #2 (px)')
+                axs[2,0].grid()
+
+                axs[2,1].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,5], 'o',label='40 FPS') 
+                axs[2,1].plot(  self.df[:,-1], self.df[:,i*6+5], '-',label='100 FPS interpolation')
+                axs[2,1].set_xlabel('t (seconds)')
+                axs[2,1].set_ylabel('Y - marker #2 (px)')
+                axs[2,1].grid()
+                plt.draw()
                 plt.show()
 
     def myReshaping(self,coord,tol=15):
@@ -207,8 +233,8 @@ class myServer(object):
                         plt.axhline(y=0.0, color='r', linestyle='-')
                         plt.grid()
                         #plt.axvline(x=853, c='r', linestyle='--', label="image 960")
-                        plt.xlabel("# of 3 point marker set considering all valid")
-                        plt.ylabel("Std. dev. (cm)")
+                        plt.xlabel("Image number")
+                        plt.ylabel("Deviation to mean value (cm)")
                         plt.legend()
                         ax = fig.axes
                         ax[0].minorticks_on()
