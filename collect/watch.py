@@ -40,21 +40,20 @@ def imageProcessing():
             _,thresh = cv2.threshold(img,127,255,cv2.THRESH_BINARY)
             coord = cv2.findNonZero(thresh).reshape(-1,2).T
             xMin,xMax=min(coord[1]),max(coord[1])
-            yMin,yMax=min(coord[0]),max(coord[0])
-            imgWithKPts = cv2.cvtColor(img[xMin-10:xMax+10,yMin-10:yMax+10], cv2.COLOR_GRAY2BGR) 
+            yMin,yMax=min(coord[0]),max(coord[0]) 
             keypoints = detector.detect(cv2.bitwise_not(img[xMin-10:xMax+10,yMin-10:yMax+10]))
             N = np.array(keypoints).shape[0]
-            print(N)
-            '''msg = np.zeros(N*3+4)
+            msg = np.zeros(N*3+4)
             for i in range(N): 
                 msg[(i<<1)+i],msg[(i<<1)+i+1],msg[(i<<1)+i+2]=keypoints[i].pt[0],keypoints[i].pt[1],keypoints[i].size
-            msg[-4],msg[-3],msg[-2],msg[-1]= xMin,yMin,ts,counter'''
+            msg[-4],msg[-3],msg[-2],msg[-1]= xMin,yMin,ts,counter
+            '''imgWithKPts = cv2.cvtColor(img[xMin-10:xMax+10,yMin-10:yMax+10], cv2.COLOR_GRAY2BGR)
             for keyPt in keypoints:
                 center = (int(np.round(keyPt.pt[0]*constMultiplier)), int(np.round(keyPt.pt[1]*constMultiplier)))
                 radius = int(np.round(keyPt.size/2*constMultiplier))
                 imgWithKPts = cv2.circle(imgWithKPts, center, radius, (255,0,0), thickness = 1, lineType = 16, shift = bitsShift)
                 cv2.circle(imgWithKPts, center, 1, (0, 0, 255), -1,  shift = bitsShift)     
-            frames.append(imgWithKPts)    
+            frames.append(imgWithKPts)'''    
             times.append(time.time()-start)
             counter+=1
         except GeneratorExit: return

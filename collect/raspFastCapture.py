@@ -30,7 +30,7 @@ GPIO.setup(led,GPIO.OUT)
 print("LED on")
 GPIO.output(led,1)
 
-'''print('[INFO] connecting to server')
+print('[INFO] connecting to server')
 # Socket parameters
 UDPSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 UDPSocket.sendto(str('hi').encode(),("192.168.0.104", 8888))
@@ -40,8 +40,8 @@ max_frames = int(message.split()[1])*fps
 print('[INFO] waiting trigger')
 now = time.time()
 while now < start: now = time.time()
-print('[INFO] delay in sec: ',now-start)'''
-max_frames=1000
+print('[INFO] delay in sec: ',now-start)
+#max_frames=1000
 
 cameraProcess = sp.Popen(videoCmd, stdout=sp.PIPE) # start the camera
 atexit.register(cameraProcess.terminate) # this closes the camera process in case the python scripts exits unexpectedly
