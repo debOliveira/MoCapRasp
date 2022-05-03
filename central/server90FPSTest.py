@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from nis import match
 import socket,time
+from tabnanny import verbose
 import numpy as np
 import warnings
 import threading
@@ -74,8 +75,10 @@ class myServer(object):
                         # store message parameters
                         a,b,time,imgNumber = message[-4],message[-3],message[-2],int(message[-1]) 
                         # undistort points
-                        if address[0] == '192.168.0.103': undCoord = processCentroids_calib(coord,a,b,cameraMatrix_cam1,distCoef_cam1)
-                        else: undCoord = processCentroids_calib(coord,a,b,cameraMatrix_cam2,distCoef_cam2)
+                        if address[0] == '192.168.0.103': 
+                            undCoord = processCentroids_calib(coord,a,b,cameraMatrix_cam1,distCoef_cam1)
+                        else: 
+                            undCoord = processCentroids_calib(coord,a,b,cameraMatrix_cam2,distCoef_cam2)
                         # check if there is an obstruction between the blobs
                         for [A,B,C] in undCoord.reshape([-1, 3, 2]):
                             if np.linalg.norm(A-B)<(size[0]+size[1])/2 or np.linalg.norm(A-C)<(size[0]+size[2])/2 or np.linalg.norm(B-C)<(size[1]+size[2])/2: 
@@ -326,25 +329,26 @@ class myServer(object):
                             else: centroids1,centroids2 = np.vstack((centroids1, pts1[i].reshape(-1,2))),np.vstack((centroids2, pts2[i].reshape(-1,2)))
 
                             ### VERBOSE ###
-                            img,k = np.ones((480,640,3))*25,0
-                            for pt in pts1[i].reshape(-1,2):
-                                center = (int(np.round(pt[0]*16)), int(np.round(pt[1]*16)))
-                                circle(img,center,10,(255,0,0),5,shift=4)
-                                putText(img,str(k),(int(center[0]/16)-25, int(center[1]/16)-25),FONT_HERSHEY_SIMPLEX,0.5,(255,0,0),2) 
-                                k+=1
-                            imshow(str(idxBase),img)
-                            moveWindow(str(idxBase), 0,10);
-                            waitKey(1)
-                            #imwrite(str(idxBase)+'/'+str(k).zfill(4)+'.jpg')
-                            img,k = np.ones((480,640,3))*25,0
-                            for pt in pts2[i].reshape(-1,2):
-                                center = (int(np.round(pt[0]*16)), int(np.round(pt[1]*16)))
-                                circle(img,center,10,(255,0,0),5,shift=4)
-                                putText(img,str(k),(int(center[0]/16)-25, int(center[1]/16)-25),FONT_HERSHEY_SIMPLEX,0.5,(255,0,0),2) 
-                                k+=1
-                            imshow(str(idxCompare),img)
-                            waitKey(1)
-                            moveWindow(str(idxCompare), 700,10);
+                            if verbose:
+                                img,k = np.ones((720,960,3))*25,0
+                                for pt in pts1[i].reshape(-1,2):
+                                    center = (int(np.round(pt[0]*16)), int(np.round(pt[1]*16)))
+                                    circle(img,center,10,(255,0,0),5,shift=4)
+                                    putText(img,str(k),(int(center[0]/16)-25, int(center[1]/16)-25),FONT_HERSHEY_SIMPLEX,0.5,(255,0,0),2) 
+                                    k+=1
+                                imshow(str(idxBase),img)
+                                moveWindow(str(idxBase), 0,350)
+                                waitKey(1)
+                                #imwrite(str(idxBase)+'/'+str(k).zfill(4)+'.jpg')
+                                img,k = np.ones((720,960,3))*25,0
+                                for pt in pts2[i].reshape(-1,2):
+                                    center = (int(np.round(pt[0]*16)), int(np.round(pt[1]*16)))
+                                    circle(img,center,10,(255,0,0),5,shift=4)
+                                    putText(img,str(k),(int(center[0]/16)-25, int(center[1]/16)-25),FONT_HERSHEY_SIMPLEX,0.5,(255,0,0),2) 
+                                    k+=1
+                                imshow(str(idxCompare),img)
+                                waitKey(1)
+                                moveWindow(str(idxCompare), 700,350)
                             ### VERBOSE ###
                             hasPrevious = True
                     # first time, just update and consider the first valid counter

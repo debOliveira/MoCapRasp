@@ -4,13 +4,13 @@ import numpy as np
 from sklearn import linear_model
 from constants import allCombinationsOf3
 
-cameraMatrix_cam1 =np.array([[816.188,0,318.382],[0,814.325,250.263],[0,0,1]])
-distCoef_cam1 = np.array([[-0.292355],[0.199853],[0.386838],[-6.51433]], dtype=np.float32)
+cameraMatrix_cam1 =np.array([[720.313,0,481.014],[0,719.521,360.991],[0,0,1]])
+distCoef_cam1 = np.array([[0.395621],[0.633705],[-2.41723],[2.11079]], dtype=np.float32)
 
-cameraMatrix_cam2 =np.array([[684.117,0.,313.435],[0.,683.027,262.314],[0,0,1]])
-distCoef_cam2 = np.array([[-0.202044],[0.657496],[-1.64378],[0.418432]], dtype=np.float32)
-map1_cam1, map2_cam1 = initUndistortRectifyMap(cameraMatrix_cam1, distCoef_cam1, np.eye(3), cameraMatrix_cam1, (640,480), CV_16SC2)
-map1_cam2, map2_cam2 = initUndistortRectifyMap(cameraMatrix_cam2, distCoef_cam2, np.eye(3), cameraMatrix_cam2, (640,480), CV_16SC2)
+cameraMatrix_cam2 =np.array([[768.113,0.,472.596],[0.,767.935,350.978],[0,0,1]])
+distCoef_cam2 = np.array([[0.368917],[1.50111],[-7.94126],[11.9171]], dtype=np.float32)
+map1_cam1, map2_cam1 = initUndistortRectifyMap(cameraMatrix_cam1, distCoef_cam1, np.eye(3), cameraMatrix_cam1, (960,720), CV_16SC2)
+map1_cam2, map2_cam2 = initUndistortRectifyMap(cameraMatrix_cam2, distCoef_cam2, np.eye(3), cameraMatrix_cam2, (960,720), CV_16SC2)
 
 
 def myUndistortPointsFisheye(pts,K,D):
