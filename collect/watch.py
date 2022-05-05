@@ -41,7 +41,7 @@ def imageProcessing():
             coord = cv2.findNonZero(thresh).reshape(-1,2).T
             xMin,xMax=min(coord[1]),max(coord[1])
             yMin,yMax=min(coord[0]),max(coord[0]) 
-            keypoints = detector.detect(cv2.bitwise_not(img[xMin-10:xMax+10,yMin-10:yMax+10]))
+            keypoints = detector.detect(cv2.bitwise_not(img[xMin-5:xMax+5,yMin-5:yMax+5]))
             N = np.array(keypoints).shape[0]
             msg = np.zeros(N*3+4)
             for i in range(N): 
@@ -54,7 +54,7 @@ def imageProcessing():
                 radius = int(np.round(keyPt.size/2*constMultiplier))
                 imgWithKPts = cv2.circle(imgWithKPts, center, radius, (255,0,0), thickness = 1, lineType = 16, shift = bitsShift)
                 cv2.circle(imgWithKPts, center, 1, (0, 0, 255), -1,  shift = bitsShift)     
-            frames.append(imgWithKPts)'''    
+            frames.append(imgWithKPts)  '''
             times.append(time.time()-start)
             counter+=1
         except GeneratorExit: return
