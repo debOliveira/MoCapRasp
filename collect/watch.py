@@ -1,24 +1,34 @@
-# import time module, Observer, FileSystemEventHandler
-import time
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-import cv2,os,socket
 import numpy as np
+import cv2,os,socket,time,argparse
+
+# parser for command line
+parser = argparse.ArgumentParser(description='''Image processing client for the MoCap system at the Erobotica lab of UFCG.
+                                                \nPlease use it together with the corresponding server script.''',add_help=False)
+parser.add_argument('-min',type=int,help='minimal threshold for the blob detector (default: 50)',default=50)
+parser.add_argument('-max',type=int,help='maximal threshold for the blob detector (default: 151)',default=151)
+parser.add_argument('-s',type=int,help='step between the threshold filters (default: 50)',default=50)
+parser.add_argument('-high',type=int,help='high threshold filter cut-off intensity (to identify area used by the processor)',default=127)
+parser.add_argument('-rep',type=int,help='minimal repeatability for the blobs',default=3)
+parser.add_argument('-area',type=float,help='minimal area for the blobs',default=2)
+parser.add_argument('--help', action='help', default=argparse.SUPPRESS, help='Show this help message and exit.')
+args = parser.parse_args()
 
 os.system('rm -rf /dev/shm/*.bmp')
 
 params = cv2.SimpleBlobDetector_Params()
-params.minThreshold = 50   
-params.thresholdStep = 50
-params.maxThreshold = 151
+params.minThreshold = args.min
+params.thresholdStep = args.s
+params.maxThreshold = args.max
 params.minDistBetweenBlobs = 0
 params.filterByColor = True
 params.filterByArea= True
-params.minArea = 2
+params.minArea = args.area
 params.filterByConvexity = False
 params.minConvexity = 0.90
 params.blobColor = 0
-params.minRepeatability = 3
+params.minRepeatability = args.rep
 detector = cv2.SimpleBlobDetector_create(params)
 
 pid = os.getpid()
@@ -31,13 +41,12 @@ UDPSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 
 def imageProcessing():
     counter=0          
-    bitsShift = 4
-    constMultiplier = 16      
+    bitsShift,constMultiplier,highThresh = 4,16,args.high
     while True:
         try:
             start=time.time()
             img,ts = (yield)
-            _,thresh = cv2.threshold(img,127,255,cv2.THRESH_BINARY)
+            _,thresh = cv2.threshold(img,highThresh,255,cv2.THRESH_BINARY)
             coord = cv2.findNonZero(thresh).reshape(-1,2).T
             xMin,xMax=min(coord[1]),max(coord[1])
             yMin,yMax=min(coord[0]),max(coord[0]) 

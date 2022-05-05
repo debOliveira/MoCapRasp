@@ -8,18 +8,28 @@
 
 import numpy as np
 import subprocess as sp
-import time,cv2,atexit,socket
-#import matplotlib.pyplot as plt
 import RPi.GPIO as GPIO
+import time,cv2,atexit,socket,argparse
 
+# parser for command line
+parser = argparse.ArgumentParser(description='''Capture client for the MoCap system at the Erobotica lab of UFCG.
+                                                \nPlease use it together with the corresponding server script.''',add_help=False)
+parser.add_argument('-w',type=int,help='image width (default: 960px)',default=960)
+parser.add_argument('-h',type=int,help='image height (default: 720px)',default=720)
+parser.add_argument('-fps',type=int,help='frames per second (default: 40FPS)',default=40)
+parser.add_argument('-ag',type=int,help='camera analog gain (default: 2)',default=2)
+parser.add_argument('-dg',type=int,help='camera digital gain (default: 4)',default=4)
+parser.add_argument('-md',type=int,default=4,help='camera mode (default: 4)')
+parser.add_argument('--help', action='help', default=argparse.SUPPRESS, help='Show this help message and exit.')
+args = parser.parse_args()
 print('[INFO] configuring parameters')
 frames = [] # stores the video sequence for the demo
 N_frames = 0
 # Video capture parameters
-(w,h) = (960,720)
+(w,h) = (args.w,args.h)
 bytesPerFrame = w * h
-md,ag,dg,co = 4,2,4,100
-fps = 40 # setting to 250 will request the maximum framerate possible
+md,ag,dg,co = args.md,args.ag,args.dg,100
+fps = args.fps # setting to 250 will request the maximum framerate possible
 videoCmd = "./raspividyuv -p 0,0,960,720 -w "+str(w)+" -h "+str(h)+" --output - --timeout 0 --framerate "+str(fps)+" -fli off -cfx 128,128 -ex off --luma -awb off --awbgains 1.3,1.8 -ag "+str(ag)+" -dg "+str(dg)+" -pts - -md "+str(md)+" -co "+str(co)
 videoCmd = videoCmd.split() # Popen requires that each parameter is a separate string
 # turning LED on
@@ -27,13 +37,13 @@ GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 led = 4
 GPIO.setup(led,GPIO.OUT)
-print("LED on")
+print("[INFO] LED on")
 GPIO.output(led,1)
 
 print('[INFO] connecting to server')
 # Socket parameters
 UDPSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-UDPSocket.sendto(str('hi').encode(),("192.168.0.104", 8888))
+UDPSocket.sendto(str(str(w)+','+str(h)).encode(),("192.168.0.104", 8888))
 message,_ = UDPSocket.recvfrom(1024)
 start = float(message.split()[0])
 max_frames = int(message.split()[1])*fps
