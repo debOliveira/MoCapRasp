@@ -9,8 +9,8 @@ distCoef_cam1 = np.array([[0.395621],[0.633705],[-2.41723],[2.11079]], dtype=np.
 
 cameraMatrix_cam2 =np.array([[768.113,0.,472.596],[0.,767.935,350.978],[0,0,1]])
 distCoef_cam2 = np.array([[0.368917],[1.50111],[-7.94126],[11.9171]], dtype=np.float32)
-map1_cam1, map2_cam1 = initUndistortRectifyMap(cameraMatrix_cam1, distCoef_cam1, np.eye(3), cameraMatrix_cam1, (960,720), CV_16SC2)
-map1_cam2, map2_cam2 = initUndistortRectifyMap(cameraMatrix_cam2, distCoef_cam2, np.eye(3), cameraMatrix_cam2, (960,720), CV_16SC2)
+#map1_cam1, map2_cam1 = initUndistortRectifyMap(cameraMatrix_cam1, distCoef_cam1, np.eye(3), cameraMatrix_cam1, (960,720), CV_16SC2)
+#map1_cam2, map2_cam2 = initUndistortRectifyMap(cameraMatrix_cam2, distCoef_cam2, np.eye(3), cameraMatrix_cam2, (960,720), CV_16SC2)
 
 
 def myUndistortPointsFisheye(pts,K,D):

@@ -1,36 +1,29 @@
 # IMPORTS >>> DO NOT CHANGE <<<
-from dataclasses import dataclass
-from nis import match
-import socket,time
-from tabnanny import verbose
-import numpy as np
 import warnings
-import threading
 warnings.filterwarnings("ignore")
-from functions import processCentroids_calib,map1_cam1,map1_cam2,map2_cam1,map2_cam2,cameraMatrix_cam1,cameraMatrix_cam2,distCoef_cam1,distCoef_cam2
+import socket,time,math,argparse
+import numpy as np
+from functions import processCentroids_calib,cameraMatrix_cam1,cameraMatrix_cam2,distCoef_cam1,distCoef_cam2
 from cv2 import circle,putText,imshow,waitKey,FONT_HERSHEY_SIMPLEX,destroyAllWindows,triangulatePoints,moveWindow,imwrite
 from myLib import orderCenterCoord,getPreviousCentroid,estimateFundMatrix_8norm,decomposeEssentialMat,myProjectionPoints,isCollinear,isEqual,swapElements,getSignal
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.interpolate import CubicSpline
-import math
-import time as timeLib
 
 class myServer(object):
-    def __init__(self):
+    def __init__(self,numberCameras,triggerTime,recTime,FPS,verbose):
         ##########################################
         # PLEASE CHANGE JUST THE VARIABLES BELOW #
         ##########################################
-        self.numberCameras,self.triggerTime,self.recTime,self.step = 2,10,30,0.01
-
+        self.numberCameras,self.triggerTime,self.recTime,self.step = numberCameras,triggerTime,recTime,1/FPS
+        self.cameraMat = np.array([cameraMatrix_cam1,cameraMatrix_cam2])
         # do not change below this line, socket variables
-        self.nImages = int(self.recTime/self.step)
+        self.nImages,self.imageSize = int(self.recTime/self.step),[]
         print('[INFO] creating server')
-        self.lock = threading.Lock()
         self.bufferSize,self.server_socket = 1024,socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
         self.server_socket.bind(('0.0.0.0',8888))
         # internal variables
-        self.data,self.verbose,self.addDic,self.capture,self.myIPs,self.counter= [],True,{},np.ones(self.numberCameras,dtype=np.bool),[],0
+        self.data,self.verbose,self.addDic,self.capture,self.myIPs,self.counter= [],verbose,{},np.ones(self.numberCameras,dtype=np.bool),[],0
         for i in range(self.numberCameras): self.data.append([])
         self.df = np.zeros((int(self.recTime/self.step),self.numberCameras*6+1))
         self.df[:,-1] = np.linspace(0,self.recTime,self.nImages)
@@ -40,10 +33,14 @@ class myServer(object):
         print("[INFO] server running, waiting for clients")
         for i in range(self.numberCameras):
             # COLLECT ADDRESSES
-            _,address = self.server_socket.recvfrom(self.bufferSize)
+            message,address = self.server_socket.recvfrom(self.bufferSize)
+            self.imageSize.append(np.array(message.decode("utf-8").split(",")).astype(np.int))
             self.addDic[address[0]]=i
             self.myIPs.append(address)
             print('[INFO] client '+str(len(self.addDic))+' connected at '+str(address[0]))
+            ret,newCamMatrix=self.myIntrinsics(self.cameraMat[i],self.imageSize[i][0],self.imageSize[i][1],self.imageSize[i][2])
+            if ret: self.cameraMat[i]=np.copy(newCamMatrix)
+            else: break
         # SEND TRIGGER 
         print('[INFO] all clients connected')
         self.triggerTime += time.time()
@@ -54,6 +51,45 @@ class myServer(object):
     def myInterpol(self,t,x,tNew):
         ff = CubicSpline(t, x,axis=0)
         return ff(tNew*self.step)
+
+    # NEW INTRINSICS
+    def myIntrinsics(self,intrisicsMatrix,w,h,mode):
+        camIntris = np.copy(intrisicsMatrix) # copy to avoid registrer error
+        # check if image is at the vailable proportion
+        if w/h==4/3 or w/h==16/9:
+            if mode==4: # only resize
+                ratio = w/960
+                camIntris[0][0],camIntris[0][2]=ratio*camIntris[0][0],ratio*camIntris[0][2]
+                camIntris[1][1],camIntris[1][2]=ratio*camIntris[1][1],ratio*camIntris[1][2]
+            elif mode==5: # crop in X and resize
+                ratio = 1640/960
+                camIntris[0][0],camIntris[0][2]=ratio*camIntris[0][0],ratio*camIntris[0][2]
+                camIntris[1][1],camIntris[1][2]=ratio*camIntris[1][1],ratio*camIntris[1][2]-155
+                ratio = w/1640
+                camIntris[0][0],camIntris[0][2]=ratio*camIntris[0][0],ratio*camIntris[0][2]
+                camIntris[1][1],camIntris[1][2]=ratio*camIntris[1][1],ratio*camIntris[1][2]
+                print(camIntris)
+            elif mode==6: # crop in Y and X and resize
+                ratio=1640/960
+                camIntris[0][0],camIntris[0][2]=ratio*camIntris[0][0],ratio*camIntris[0][2]-180
+                camIntris[1][1],camIntris[1][2]=ratio*camIntris[1][1],ratio*camIntris[1][2]-255
+                ratio = w/1280
+                camIntris[0][0],camIntris[0][2]=ratio*camIntris[0][0],ratio*camIntris[0][2]
+                camIntris[1][1],camIntris[1][2]=ratio*camIntris[1][1],ratio*camIntris[1][2]
+            elif mode==7: # crop in Y and X and resize
+                ratio=1640/960
+                camIntris[0][0],camIntris[0][2]=ratio*camIntris[0][0],ratio*camIntris[0][2]-500
+                camIntris[1][1],camIntris[1][2]=ratio*camIntris[1][1],ratio*camIntris[1][2]-375
+                ratio = w/640
+                camIntris[0][0],camIntris[0][2]=ratio*camIntris[0][0],ratio*camIntris[0][2]
+                camIntris[1][1],camIntris[1][2]=ratio*camIntris[1][1],ratio*camIntris[1][2]
+            else:
+                print('conversion for intrinsics matrix not known')
+                return False,camIntris
+            return True,camIntris
+        else:
+            print('out of proportion of the camera mode')
+            return False,camIntris
 
     # COLLECT POINTS FROM CLIENTS, ORDER AND TRIGGER INTERPOLATION
     def collect(self):
@@ -198,7 +234,7 @@ class myServer(object):
                     if self.verbose:
                         copyCentroids1,copyCentroids2 = centroids1.reshape(-1,3,2),centroids2.reshape(-1,3,2)
                         for i in range(0,copyCentroids1.shape[0]):
-                            img1,img2,k = np.ones((720,960,3))*255,np.ones((720,960,3))*255,0
+                            img1,img2,k = np.ones((self.imageSize[0][1],self.imageSize[0][0],3))*255,np.ones((self.imageSize[0][1],self.imageSize[0][0],3))*255,0
                             for k in range(0,3):
                                 pts1,pts2 = copyCentroids1[i][k],copyCentroids2[i][k]
                                 center1,center2 = (int(np.round(pts1[0]*16)),int(np.round(pts1[1]*16))),(int(np.round(pts2[0]*16)),int(np.round(pts2[1]*16)))
@@ -328,7 +364,17 @@ class myServer(object):
             except GeneratorExit: return
             #except: continue
 
+# parser for command line
+parser = argparse.ArgumentParser(description='''Server for the MoCap system at the Erobotica lab of UFCG.
+                                                \nPlease use it together with the corresponding client script.''',add_help=False)
+parser.add_argument('-n',type=int,help='number of cameras (default: 2)',default=2)
+parser.add_argument('-trig',type=int,help='trigger time in seconds (default: 10)',default=10)
+parser.add_argument('-rec',type=int,help='recording time in seconds (default: 30)',default=30)
+parser.add_argument('-fps',type=int,help='interpolation fps (default: 100FPS)',default=100)
+parser.add_argument('--verbose',help='show points capture after end of recording time (default: off)',default=False, action='store_true')
+parser.add_argument('--help', action='help', default=argparse.SUPPRESS, help='Show this help message and exit.')
+args = parser.parse_args()
 
-myServer_ = myServer()
+myServer_ = myServer(args.n,args.trig,args.rec,args.fps,args.verbose)
 myServer_.connect()
 myServer_.collect()
