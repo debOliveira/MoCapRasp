@@ -43,7 +43,7 @@ GPIO.output(led,1)
 print('[INFO] connecting to server')
 # Socket parameters
 UDPSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-UDPSocket.sendto(str(str(w)+','+str(h)).encode(),("192.168.0.104", 8888))
+UDPSocket.sendto(str(str(w)+','+str(h)+','+str(md)).encode(),("192.168.0.104", 8888))
 message,_ = UDPSocket.recvfrom(1024)
 start = float(message.split()[0])
 max_frames = int(message.split()[1])*fps
