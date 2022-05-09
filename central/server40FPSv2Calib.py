@@ -68,7 +68,6 @@ class myServer(object):
                 ratio = w/1640
                 camIntris[0][0],camIntris[0][2]=ratio*camIntris[0][0],ratio*camIntris[0][2]
                 camIntris[1][1],camIntris[1][2]=ratio*camIntris[1][1],ratio*camIntris[1][2]
-                print(camIntris)
             elif mode==6: # crop in Y and X and resize
                 ratio=1640/960
                 camIntris[0][0],camIntris[0][2]=ratio*camIntris[0][0],ratio*camIntris[0][2]-180
@@ -86,6 +85,7 @@ class myServer(object):
             else:
                 print('conversion for intrinsics matrix not known')
                 return False,camIntris
+            print('[INFO] resized intrisics')
             return True,camIntris
         else:
             print('out of proportion of the camera mode')
