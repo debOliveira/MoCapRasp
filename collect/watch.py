@@ -90,8 +90,7 @@ class OnMyWatch:
         except:
             UDPSocket.sendto(np.array([0.0]).tobytes(),("192.168.0.104", 8888))
             self.observer.stop()
-            print("Observer Stopped 2")
-  
+            print("Observer Stopped 2")  
         self.observer.join()
   
   
@@ -112,7 +111,7 @@ class Handler(FileSystemEventHandler):
                 img = cv2.imread('/dev/shm/'+name+'.bmp',cv2.IMREAD_GRAYSCALE)
                 if img is not None: Handler.coRout.send((img,int(name)))
                 os.remove('/dev/shm/'+name+'.bmp')
-            Handler.lastImg = event.src_path[-13:-4]
+            Handler.lastImg = event.src_path[-14:-4]
             Handler.counter+=1
                     
                     

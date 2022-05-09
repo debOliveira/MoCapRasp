@@ -36,7 +36,7 @@ print("[INFO] LED on and parameters configured")
 GPIO.output(led,1)
 
 # server parameters
-'''print('[INFO] connecting to server')
+print('[INFO] connecting to server')
 UDPSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 UDPSocket.sendto(str(str(w)+','+str(h)+','+str(md)).encode(),("192.168.0.104", 8888))
 message,_ = UDPSocket.recvfrom(1024)
@@ -45,8 +45,8 @@ max_frames = int(message.split()[1])*fps
 print('[INFO] waiting trigger')
 now = time.time()
 while now < start: now = time.time()
-print('[INFO] delay in sec: ',now-start)'''
-max_frames=500
+print('[INFO] delay in sec: ',now-start)
+#max_frames=20
 
 # running command
 cameraProcess = sp.Popen(videoCmd, stdout=sp.PIPE) # start the camera
@@ -64,7 +64,7 @@ while True:
 	# capture timestamp
 	ts = cameraProcess.stdout.readline()[-11:-1].decode().strip()
 	# write image
-	cv2.imwrite('/dev/shm/'+str(ts).zfill(10)+'.bmp',frame)
+	cv2.imwrite('/dev/shm/'+ts.zfill(10)+'.bmp',frame)
 	# free memory
 	cameraProcess.stdout.flush()
 	del frame
