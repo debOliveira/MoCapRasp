@@ -165,6 +165,9 @@ class myServer(object):
             for idx in range(0,self.numberCameras):
                 pts = np.array(self.data[idx][-11:])  
                 coord,time = pts[:,0:6],pts[:,6]/1e6
+                if np.any(time>self.recTime): 
+                    pts = np.array(self.data[idx][-11:(-11+np.argmax(time>self.recTime))])  
+                    coord,time = pts[:,0:6],pts[:,6]/1e6
                 lowBound,highBound = math.ceil(time[0]/self.step),math.floor(time[-1]/self.step)
                 tNew = np.linspace(lowBound,highBound,int((highBound-lowBound))+1,dtype=np.uint16)
                 self.df[tNew,int(idx*6):int(idx*6+6)] = self.myInterpol(time,coord,tNew)
@@ -345,7 +348,7 @@ class myServer(object):
                         plt.show()
                 else: # if timestamp is not null
                     if self.counter: # first timestamp does not come (img on 00000 is full black)
-                        print(self.counter,tNew)
+                        #print(self.counter,tNew)
                         pts1,pts2 = np.copy(self.df[int(self.counter)+1:int(tNew)+1,int(idxBase*6):int(idxBase*6+6)]),np.copy(self.df[int(self.counter)+1:int(tNew)+1,int(idxCompare*6):int(idxCompare*6+6)])
                         for i in range(int(tNew-self.counter)):
                             # check if any of the cameras changes the order of the markers
