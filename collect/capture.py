@@ -1,3 +1,8 @@
+# Fast reading from the raspberry camera with Python, Numpy, and OpenCV
+# Made by @CarlosGS in May 2017
+# Adapted by @debOliveira in May 2022
+# License: Public Domain, attribution appreciated
+
 import numpy as np
 import subprocess as sp
 import RPi.GPIO as GPIO
@@ -58,7 +63,7 @@ while True:
 	# capture frame
 	frame = np.frombuffer(cameraProcess.stdout.read(bytesPerFrame), dtype=np.uint8)
 	if frame.size != bytesPerFrame:
-		print("Error: Camera stream closed unexpectedly")
+		print("[ERROR] Camera stream closed unexpectedly")
 		break
 	frame.shape = (h,w) 
 	# capture timestamp
