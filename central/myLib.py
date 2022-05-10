@@ -14,7 +14,7 @@ def isCollinear(p0, p1, p2):
 def isEqual(pt):
     A,B,C = pt[0],pt[1],pt[2]
     AB,AC,BC = np.linalg.norm(A-B),np.linalg.norm(A-C),np.linalg.norm(C-B)
-    return min(AB,AC,BC)<2
+    return min(AB,AC,BC)<5
 
 def getPreviousCentroid(noPrevious, lastCentroid):
     if not noPrevious: return []
