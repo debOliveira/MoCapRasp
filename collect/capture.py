@@ -3,6 +3,7 @@
 # Adapted by @debOliveira in May 2022
 # License: Public Domain, attribution appreciated
 
+import numpy as np
 import subprocess as sp
 import RPi.GPIO as GPIO
 import time,cv2,atexit,socket,argparse,selectors
