@@ -91,6 +91,32 @@ class myServer(object):
             print('out of proportion of the camera mode')
             return False,camIntris
 
+    # RESHAPE THE COORDINATE VECTOR AND CHANGE ORDER IF CAMERAS ARE IDENTIFYING THE OPOSITE DIRECTION   
+    def myReshaping(self,coord,tol=15):
+        # get Y and X distances between markers
+        centerX, centerY = np.vstack((coord[:,0], coord[:,2], coord[:,4])).T,np.vstack((coord[:,1], coord[:,3], coord[:,5])).T
+        distX = np.array(centerX).max(axis=1) - np.array(centerX).min(axis=1)
+        if np.all(distX<tol): maxVec,minVec = centerY[:,2],centerY[:,0]
+        elif np.any(distX<tol):
+            # looking to the arena, behind the cameras (where the AC is directed to the wall)
+            # if lowest marker is from left camera, it is the foremost left marker of the right camera
+            # if lowest marker is from right camera, it is the foremost right marker of the left camera
+            idxY = np.argmax(np.all(distX<tol))
+            lowestMarker = np.argmax(centerY[idxY])
+            if not idxY: # ALWAYS USE CAMERA LEFT AS CAMERA 0
+                leftMarker = np.argmin(centerX[1])
+                if lowestMarker == leftMarker: return False
+                return True
+            else: 
+                rightMarker = np.argmax(centerX[0])
+                if lowestMarker == rightMarker: return False
+                return True
+        else: maxVec,minVec = centerX[:,2],centerX[:,0]
+        # get signal between markers extremities
+        firstCam,secCam = getSignal(maxVec[0],minVec[0]),getSignal(maxVec[1],minVec[1])
+        if firstCam != secCam: return True
+        return False
+
     # COLLECT POINTS FROM CLIENTS, ORDER AND TRIGGER INTERPOLATION
     def collect(self):
         # internal variables
@@ -114,35 +140,37 @@ class myServer(object):
                     else: 
                         msg = message[0:sizeMsg-4].reshape(-1,3)
                         coord,size = msg[:,0:2],msg[:,2].reshape(-1)
-                        # if more than 3 blobs are found, get the four bigger
+                        # if more than 3 blobs are found, get the four biggest
                         if sizeMsg > 13: 
                             orderAscDiameters = np.argsort(size)
                             coord = np.array([coord[orderAscDiameters[-1]],coord[orderAscDiameters[-2]],coord[orderAscDiameters[-3]]]).reshape(-1,2)
                         # store message parameters
                         a,b,time,imgNumber = message[-4],message[-3],message[-2],int(message[-1]) 
                         # undistort points
-                        if address[0] == '192.168.0.103': undCoord = processCentroids_calib(coord,a,b,cameraMatrix_cam1,distCoef_cam1)
-                        else: undCoord = processCentroids_calib(coord,a,b,cameraMatrix_cam2,distCoef_cam2)
+                        if address[0] == '192.168.0.103': undCoord = processCentroids_calib(coord,a,b,self.cameraMat[0],distCoef_cam1)
+                        else: undCoord = processCentroids_calib(coord,a,b,self.cameraMat[1],distCoef_cam2)
                         # check if there is an obstruction between the blobs
                         for [A,B,C] in undCoord.reshape([-1, 3, 2]):
                             if np.linalg.norm(A-B)<(size[0]+size[1])/2 or np.linalg.norm(A-C)<(size[0]+size[2])/2 or np.linalg.norm(B-C)<(size[1]+size[2])/2: 
                                 print('occlusion')
                                 invalid[idx]+=1
                                 continue
-                        # if ts if not read corectly
+                        # if ts if not read corectly, discard
                         if counter[idx]:
                             if time-lastTime[idx]>1e7: 
                                 print('time missmatch')
                                 invalid[idx]+=1
                                 continue
                         # order markers and check collinearity
-                        if isCollinear(*undCoord) and not isEqual(undCoord) or np.any(undCoord<0):     
+                        if isCollinear(*undCoord) or not isEqual(undCoord) or np.any(undCoord<0):     
                             if invalid[idx]>=10 or not counter[idx]: prev = []        
                             else: prev = np.array(self.data[idx][-1][0:6]).reshape(1,-2)
                             undCoord, _ = orderCenterCoord(undCoord,prev)
                             undCoord = np.array(undCoord)
-                        else: 
+                        else: # discard
                             print('not collinear')
+                            print(isCollinear(*undCoord),not isEqual(undCoord),np.any(undCoord<0))
+                            print(undCoord)
                             invalid[idx]+=1
                             continue
                         # add ordered makers to database
@@ -180,6 +208,7 @@ class myServer(object):
             print('[RESULTS] server results are')
             for i in range(self.numberCameras): print('  >> camera '+str(i)+': '+str(len(self.data[i]))+' captured valid images images, address '+str(self.myIPs[i][0])+', missed '+str(int(invalid[i]))+' images')
             #plot the beautiful stuff
+            #savetxt('data.csv', data, delimiter=',')
             for i in range(self.numberCameras):       
                 _,axs = plt.subplots(3, 2,figsize=(10,20),dpi=100)
                 axs[0,0].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,0], 'o',label='40 FPS') 
@@ -211,18 +240,6 @@ class myServer(object):
                 plt.draw()
                 plt.show()
 
-    # RESHAPE THE COORDINATE VECTOR AND CHANGE ORDER IF CAMERAS ARE IDENTIFYING THE OPOSITE
-    def myReshaping(self,coord,tol=15):
-        # get Y and X distances between markers
-        centerX, centerY = np.vstack((coord[:,0], coord[:,2], coord[:,4])).T,np.vstack((coord[:,1], coord[:,3], coord[:,5])).T
-        distY = np.array(centerY).max(axis=1) - np.array(centerY).min(axis=1)
-        if np.any(distY<tol): maxVec,minVec = centerX[:,2],centerX[:,0]
-        else: maxVec,minVec = centerY[:,2],centerY[:,0]
-        # get signal between markers extremities
-        firstCam,secCam = getSignal(maxVec[0],minVec[0]),getSignal(maxVec[1],minVec[1])
-        if firstCam != secCam: return True
-        return False
-
     # COROUTINE TO CREATE INTERPOLATION DATABASE
     def myProcessing(self):        
         idxBase,idxCompare,hasPrevious,centroids1,centroids2=0,1,False,[0],[0]
@@ -250,16 +267,16 @@ class myServer(object):
                             waitKey(1)
                     # get fundamental and essential matrices
                     F,_ = estimateFundMatrix_8norm(np.array(centroids1),np.array(centroids2))
-                    E = np.matmul(cameraMatrix_cam2.T, np.matmul(F, cameraMatrix_cam1))
+                    E = np.matmul(self.cameraMat[1].T, np.matmul(F, self.cameraMat[0]))
                     print("\nEssenc. Mat.\n", E.round(4))
                     # decompose to rotation and translation between cameras
-                    R, t = decomposeEssentialMat(E, cameraMatrix_cam1, cameraMatrix_cam2, np.array(centroids1), np.array(centroids2))
+                    R, t = decomposeEssentialMat(E, self.cameraMat[0], self.cameraMat[1], np.array(centroids1), np.array(centroids2))
                     if np.any(np.isnan(R)): print('no valid rotation matrix')
                     else:
                         # triangulate points
                         print("\nRot. Mat.\n", R.round(4))
                         print("\nTrans. Mat.\n", t.round(4))
-                        P1,P2 = np.hstack((cameraMatrix_cam1, [[0.], [0.], [0.]])),np.matmul(cameraMatrix_cam2, np.hstack((R, t.T)))
+                        P1,P2 = np.hstack((self.cameraMat[0], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[1], np.hstack((R, t.T)))
                         projPt1,projPt2 = myProjectionPoints(np.array(centroids1)),myProjectionPoints(np.array(centroids2))
                         points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
                         points3d = (points4d[:3, :]/points4d[3, :]).T
@@ -331,6 +348,7 @@ class myServer(object):
                         ax.quiver(0, 0, 0, z[0], z[2], z[1], arrow_length_ratio=0.1, edgecolors="g")
                         ax.scatter(0, 0, 0, edgecolor="blue", facecolor="black")
                         x,y,z = np.array([scale, 0, 0]), np.array([0, scale, 0]),np.array([0, 0, scale])
+                        x,y,z = np.matmul(R.T, x),np.matmul(R.T, y),np.matmul(R.T, z)
                         x,y,z = np.matmul(Rz, x),np.matmul(Rz, y),np.matmul(Rz, z)
                         t_new,points3d_new = np.matmul(Rz,t_aux.T).T,np.matmul(Rz,points3d.T).T
                         ax.quiver(t_new[0][0], t_new[0][2], t_new[0][1], x[0], x[2], x[1], arrow_length_ratio=0.1, edgecolors="r")
@@ -362,6 +380,20 @@ class myServer(object):
                             if not hasPrevious: centroids1,centroids2 = np.copy(pts1[i].reshape(-1,2)),np.copy(pts2[i].reshape(-1,2))
                             else: centroids1,centroids2 = np.vstack((centroids1, pts1[i].reshape(-1,2))),np.vstack((centroids2, pts2[i].reshape(-1,2)))
                             hasPrevious = True
+                            ### VERBOSE
+                            '''if self.verbose:
+                                img1,img2,k = np.ones((self.imageSize[0][1],self.imageSize[0][0],3))*255,np.ones((self.imageSize[0][1],self.imageSize[0][0],3))*255,0
+                                for k in range(0,3):
+                                    pt1,pt2 = pts1.reshape(-1,2)[k],pts2.reshape(-1,2)[k]
+                                    center1,center2 = (int(np.round(pt1[0]*16)),int(np.round(pt1[1]*16))),(int(np.round(pt2[0]*16)),int(np.round(pt2[1]*16)))
+                                    circle(img1,center1,10,(255,0,0),5,shift=4)
+                                    circle(img2,center2,10,(255,0,0),5,shift=4)
+                                    putText(img1,str(k),(int(center1[0]/16)-25, int(center1[1]/16)-25),FONT_HERSHEY_SIMPLEX,0.5,(255,0,0),2) 
+                                    putText(img2,str(k),(int(center2[0]/16)-25, int(center2[1]/16)-25),FONT_HERSHEY_SIMPLEX,0.5,(255,0,0),2) 
+                                imshow('verbose',np.hstack((img1,img2)))
+                                moveWindow(str(idxBase), 0,350)
+                                waitKey(1)
+                            ### VERBOSE'''
                     # first time, just update and consider the first valid counter
                     self.counter=np.copy(tNew)
             except GeneratorExit: return
