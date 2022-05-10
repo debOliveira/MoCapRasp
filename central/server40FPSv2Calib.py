@@ -25,7 +25,7 @@ class myServer(object):
         # internal variables
         self.data,self.verbose,self.addDic,self.capture,self.myIPs,self.counter= [],verbose,{},np.ones(self.numberCameras,dtype=np.bool),[],0
         for i in range(self.numberCameras): self.data.append([])
-        self.df = np.zeros((int(self.recTime/self.step),self.numberCameras*6+1))
+        self.df,self.invalid = np.zeros((int(self.recTime/self.step),self.numberCameras*6+1)),np.zeros(self.numberCameras,dtype=np.uint8)
         self.df[:,-1] = np.linspace(0,self.recTime,self.nImages)
 
     # CONNECT WITH CLIENTS
@@ -101,14 +101,16 @@ class myServer(object):
             # looking to the arena, behind the cameras (where the AC is directed to the wall)
             # if lowest marker is from left camera, it is the foremost left marker of the right camera
             # if lowest marker is from right camera, it is the foremost right marker of the left camera
-            idxY = np.argmax(np.all(distX<tol))
+            idxY = np.argmax(distX<tol)
             lowestMarker = np.argmax(centerY[idxY])
             if not idxY: # ALWAYS USE CAMERA LEFT AS CAMERA 0
                 leftMarker = np.argmin(centerX[1])
+                print(leftMarker)
                 if lowestMarker == leftMarker: return False
                 return True
             else: 
                 rightMarker = np.argmax(centerX[0])
+                print(rightMarker)
                 if lowestMarker == rightMarker: return False
                 return True
         else: maxVec,minVec = centerX[:,2],centerX[:,0]
@@ -121,7 +123,7 @@ class myServer(object):
     def collect(self):
         # internal variables
         print('[INFO] waiting capture')
-        invalid,coRout = np.zeros(self.numberCameras,dtype=np.uint8),self.myProcessing()
+        coRout = self.myProcessing()
         coRout.__next__()
         try:
             counter,lastTime,lastInterp = np.zeros(self.numberCameras,dtype=np.uint16),np.zeros(self.numberCameras),np.zeros(self.numberCameras)
@@ -136,7 +138,7 @@ class myServer(object):
                 if self.capture[idx]: # check if message is valid
                     if sizeMsg < 13: # if less than 3 blobs, discard
                         print('[ERROR] '+str(int((sizeMsg-4)/3))+' markers were found')
-                        invalid[idx]+=1
+                        self.invalid[idx]+=1
                     else: 
                         msg = message[0:sizeMsg-4].reshape(-1,3)
                         coord,size = msg[:,0:2],msg[:,2].reshape(-1)
@@ -153,17 +155,17 @@ class myServer(object):
                         for [A,B,C] in undCoord.reshape([-1, 3, 2]):
                             if np.linalg.norm(A-B)<(size[0]+size[1])/2 or np.linalg.norm(A-C)<(size[0]+size[2])/2 or np.linalg.norm(B-C)<(size[1]+size[2])/2: 
                                 print('occlusion')
-                                invalid[idx]+=1
+                                self.invalid[idx]+=1
                                 continue
                         # if ts if not read corectly, discard
                         if counter[idx]:
                             if time-lastTime[idx]>1e7: 
                                 print('time missmatch')
-                                invalid[idx]+=1
+                                self.invalid[idx]+=1
                                 continue
                         # order markers and check collinearity
                         if isCollinear(*undCoord) or not isEqual(undCoord) or np.any(undCoord<0):     
-                            if invalid[idx]>=10 or not counter[idx]: prev = []        
+                            if self.invalid[idx]>=10 or not counter[idx]: prev = []        
                             else: prev = np.array(self.data[idx][-1][0:6]).reshape(1,-2)
                             undCoord, _ = orderCenterCoord(undCoord,prev)
                             undCoord = np.array(undCoord)
@@ -171,7 +173,7 @@ class myServer(object):
                             print('not collinear')
                             print(isCollinear(*undCoord),not isEqual(undCoord),np.any(undCoord<0))
                             print(undCoord)
-                            invalid[idx]+=1
+                            self.invalid[idx]+=1
                             continue
                         # add ordered makers to database
                         self.data[idx].append(np.concatenate((undCoord.reshape(6),[time,imgNumber])))
@@ -206,7 +208,7 @@ class myServer(object):
             self.server_socket.close()
             destroyAllWindows()
             print('[RESULTS] server results are')
-            for i in range(self.numberCameras): print('  >> camera '+str(i)+': '+str(len(self.data[i]))+' captured valid images images, address '+str(self.myIPs[i][0])+', missed '+str(int(invalid[i]))+' images')
+            for i in range(self.numberCameras): print('  >> camera '+str(i)+': '+str(len(self.data[i]))+' captured valid images images, address '+str(self.myIPs[i][0])+', missed '+str(int(self.invalid[i]))+' images')
             #plot the beautiful stuff
             #savetxt('data.csv', data, delimiter=',')
             for i in range(self.numberCameras):       
@@ -242,7 +244,7 @@ class myServer(object):
 
     # COROUTINE TO CREATE INTERPOLATION DATABASE
     def myProcessing(self):        
-        idxBase,idxCompare,hasPrevious,centroids1,centroids2=0,1,False,[0],[0]
+        idxBase,idxCompare,hasPrevious,centroids1,centroids2,swap=0,1,False,[0],[0],False
         while True:
             try: 
                 # get the newest timestamp
@@ -370,7 +372,9 @@ class myServer(object):
                         pts1,pts2 = np.copy(self.df[int(self.counter)+1:int(tNew)+1,int(idxBase*6):int(idxBase*6+6)]),np.copy(self.df[int(self.counter)+1:int(tNew)+1,int(idxCompare*6):int(idxCompare*6+6)])
                         for i in range(int(tNew-self.counter)):
                             # check if any of the cameras changes the order of the markers
-                            swap = self.myReshaping(np.vstack((pts1[i],pts2[i])))
+                            if not hasPrevious or np.any(self.invalid>=10): 
+                                swap = self.myReshaping(np.vstack((pts1[i],pts2[i])))
+                                print('[INFO] swap flag changed to '+str(swap))
                             # swap if necessary
                             if swap: 
                                 aux = np.copy(pts1[i][0:2])
