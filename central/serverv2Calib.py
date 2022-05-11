@@ -11,11 +11,11 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.interpolate import CubicSpline
 
 class myServer(object):
-    def __init__(self,numberCameras,triggerTime,recTime,FPS,verbose):
+    def __init__(self,numberCameras,triggerTime,recTime,FPS,verbose,output):
         ##########################################
         # PLEASE CHANGE JUST THE VARIABLES BELOW #
         ##########################################
-        self.numberCameras,self.triggerTime,self.recTime,self.step = numberCameras,triggerTime,recTime,1/FPS
+        self.numberCameras,self.triggerTime,self.recTime,self.step,self.out = numberCameras,triggerTime,recTime,1/FPS,output
         self.cameraMat = np.array([cameraMatrix_cam1,cameraMatrix_cam2])
         # do not change below this line, socket variables
         self.nImages,self.imageSize = int(self.recTime/self.step),[]
@@ -25,7 +25,7 @@ class myServer(object):
         # internal variables
         self.data,self.verbose,self.addDic,self.capture,self.myIPs,self.counter= [],verbose,{},np.ones(self.numberCameras,dtype=np.bool),[],0
         for i in range(self.numberCameras): self.data.append([])
-        self.df,self.invalid = np.zeros((int(self.recTime/self.step),self.numberCameras*6+1)),np.zeros(self.numberCameras,dtype=np.uint8)
+        self.df,self.invalid,self.missed = np.zeros((int(self.recTime/self.step),self.numberCameras*6+1)),np.zeros(self.numberCameras,dtype=np.uint8),np.zeros(self.numberCameras,dtype=np.uint8)
         self.df[:,-1] = np.linspace(0,self.recTime,self.nImages)
 
     # CONNECT WITH CLIENTS
@@ -105,12 +105,10 @@ class myServer(object):
             lowestMarker = np.argmax(centerY[idxY])
             if not idxY: # ALWAYS USE CAMERA LEFT AS CAMERA 0
                 leftMarker = np.argmin(centerX[1])
-                print(leftMarker)
                 if lowestMarker == leftMarker: return False
                 return True
             else: 
                 rightMarker = np.argmax(centerX[0])
-                print(rightMarker)
                 if lowestMarker == rightMarker: return False
                 return True
         else: maxVec,minVec = centerX[:,2],centerX[:,0]
@@ -155,12 +153,14 @@ class myServer(object):
                         for [A,B,C] in undCoord.reshape([-1, 3, 2]):
                             if np.linalg.norm(A-B)<(size[0]+size[1])/2 or np.linalg.norm(A-C)<(size[0]+size[2])/2 or np.linalg.norm(B-C)<(size[1]+size[2])/2: 
                                 print('occlusion')
+                                self.missed[idx]+=1
                                 self.invalid[idx]+=1
                                 continue
                         # if ts if not read corectly, discard
                         if counter[idx]:
                             if time-lastTime[idx]>1e7: 
                                 print('time missmatch')
+                                self.missed[idx]+=1
                                 self.invalid[idx]+=1
                                 continue
                         # order markers and check collinearity
@@ -170,15 +170,15 @@ class myServer(object):
                             undCoord, _ = orderCenterCoord(undCoord,prev)
                             undCoord = np.array(undCoord)
                         else: # discard
-                            print('not collinear')
-                            print(isCollinear(*undCoord),not isEqual(undCoord),np.any(undCoord<0))
-                            print(undCoord)
+                            print('not collinear or equal centroids')
+                            self.missed[idx]+=1
                             self.invalid[idx]+=1
                             continue
                         # add ordered makers to database
                         self.data[idx].append(np.concatenate((undCoord.reshape(6),[time,imgNumber])))
                         counter[idx]+=1
                         lastTime[idx]=time
+                        self.invalid[idx]=0
                         # interpolate
                         if not counter[idx]%10: 
                             if counter[idx]>10: pts = np.array(self.data[idx][-11:])  
@@ -208,7 +208,7 @@ class myServer(object):
             self.server_socket.close()
             destroyAllWindows()
             print('[RESULTS] server results are')
-            for i in range(self.numberCameras): print('  >> camera '+str(i)+': '+str(len(self.data[i]))+' captured valid images images, address '+str(self.myIPs[i][0])+', missed '+str(int(self.invalid[i]))+' images')
+            for i in range(self.numberCameras): print('  >> camera '+str(i)+': '+str(len(self.data[i]))+' captured valid images images, address '+str(self.myIPs[i][0])+', missed '+str(int(self.missed[i]))+' images')
             #plot the beautiful stuff
             #savetxt('data.csv', data, delimiter=',')
             for i in range(self.numberCameras):       
@@ -275,6 +275,11 @@ class myServer(object):
                     R, t = decomposeEssentialMat(E, self.cameraMat[0], self.cameraMat[1], np.array(centroids1), np.array(centroids2))
                     if np.any(np.isnan(R)): print('no valid rotation matrix')
                     else:
+                        # write to file
+                        if self.out: 
+                            np.savetxt('calibData/R.csv', R, delimiter=',')
+                            np.savetxt('calibData/t.csv', t, delimiter=',')
+                            np.savetxt('calibData/lamb.csv', lamb, delimiter=',')
                         # triangulate points
                         print("\nRot. Mat.\n", R.round(4))
                         print("\nTrans. Mat.\n", t.round(4))
@@ -411,9 +416,10 @@ parser.add_argument('-trig',type=int,help='trigger time in seconds (default: 10)
 parser.add_argument('-rec',type=int,help='recording time in seconds (default: 30)',default=30)
 parser.add_argument('-fps',type=int,help='interpolation fps (default: 100FPS)',default=100)
 parser.add_argument('--verbose',help='show points capture after end of recording time (default: off)',default=False, action='store_true')
-parser.add_argument('--help', action='help', default=argparse.SUPPRESS, help='Show this help message and exit.')
+parser.add_argument('--help', action='help', default=argparse.SUPPRESS, help='show this help message and exit.')
+parser.add_argument('-out', help='write the rotation matrix and translation vector to filename (default: off)',default=False, action='store_true')
 args = parser.parse_args()
 
-myServer_ = myServer(args.n,args.trig,args.rec,args.fps,args.verbose)
+myServer_ = myServer(args.n,args.trig,args.rec,args.fps,args.verbose,args.out)
 myServer_.connect()
 myServer_.collect()

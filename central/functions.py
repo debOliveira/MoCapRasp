@@ -3,6 +3,7 @@ from cv2 import CV_16SC2
 import numpy as np
 from sklearn import linear_model
 from constants import allCombinationsOf3
+from itertools import combinations
 
 cameraMatrix_cam1 =np.array([[720.313,0,481.014],[0,719.521,360.991],[0,0,1]])
 distCoef_cam1 = np.array([[0.395621],[0.633705],[-2.41723],[2.11079]], dtype=np.float32)
@@ -66,6 +67,19 @@ def getOrder(centerX,centerY, baseAxis=False, axis = 1):
         if axis: order = np.argsort(centerY)
         else: order = np.argsort(centerX)
     return order, axis
+
+def getFourthMarker(coord):
+    allCombinationsOf3 = np.array(list(combinations([0,1,2,3],3)))
+    area = []
+    for i in allCombinationsOf3:
+        x,y,z=coord[i]
+        area.append(0.5*(x[0]*(y[1]-z[1])+y[0]*(z[1]-x[1])+z[0]*(x[1]-y[1])))
+    return allCombinationsOf3[np.argmin(area)]
+
+def getMissingNo(A):
+    n,sum_of_A = len(A)-1,sum(A)
+    total = (n + 1)*(n + 2)/2
+    return total - sum_of_A
 
 def processCentroids_test(coord,a0,b0):
     # INIT VARIABLES
