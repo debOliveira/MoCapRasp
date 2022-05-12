@@ -124,6 +124,7 @@ class myServer(object):
         print('[INFO] waiting capture')
         coRout = self.myProcessing()
         coRout.__next__()
+        bitsShift,constMultiplier = 4,16
         try:
             counter,lastTime,lastInterp,combArray,flagOclusion = np.zeros(self.numberCameras,dtype=np.uint16),np.zeros(self.numberCameras),np.zeros(self.numberCameras),np.array(list(combinations([0,1,2,3],2))),False
             while np.any(self.capture):
@@ -153,7 +154,7 @@ class myServer(object):
                         # check if there is an obstruction between the blobs
                         for i in combArray:
                             A,B = coord[i]
-                            if np.linalg.norm(A-B)<(size[i[0]]+size[i[1]]): flagOclusion = True
+                            if np.linalg.norm(A-B)<(size[i[0]]+size[i[1]])/2: flagOclusion = True
                         if flagOclusion:
                             print('occlusion')
                             self.missed[idx]+=1
@@ -166,27 +167,43 @@ class myServer(object):
                                 self.missed[idx]+=1
                                 self.invalid[idx]+=1
                                 continue
-                        # get the collinear markers
+                        # get the collinear markers and non aligned marker
+                        # change if more markers are used (or less then four are seen)
                         collinearIdx = getFourthMarker(undCoord)
-                        fourthMarker = getMissingNo(collinearIdx) # adjust this for more than 4 markers
+                        fourthMarker = getMissingNo(collinearIdx) 
                         # order markers and check collinearity
-                        '''if isCollinear(*undCoord) or not isEqual(undCoord) or np.any(undCoord<0):     
+                        if isCollinear(*undCoord[collinearIdx]) or not isEqual(undCoord) or np.any(undCoord<0):     
                             if self.invalid[idx]>=10 or not counter[idx]: prev = []        
                             else: prev = np.array(self.data[idx][-1][0:6]).reshape(1,-2)
-                            undCoord, _ = orderCenterCoord(undCoord,prev)
-                            undCoord = np.array(undCoord)
+                            undCoord_linearMarkers, _ = orderCenterCoord(undCoord[collinearIdx],prev)
+                            A,B,C = undCoord_linearMarkers
+                            if np.linalg.norm(A-B)>np.linalg.norm(B-C): 
+                                aux = np.copy(undCoord_linearMarkers[0])
+                                undCoord_linearMarkers[0] = np.copy(undCoord_linearMarkers[2])
+                                undCoord_linearMarkers[2] = aux
+                            undCoord = np.vstack((undCoord_linearMarkers,undCoord[int(fourthMarker)]))
                         else: # discard
                             print('not collinear or equal centroids')
                             self.missed[idx]+=1
                             self.invalid[idx]+=1
                             continue
+                        # VERBOSE
+                        img,k = np.ones((self.imageSize[0][1],self.imageSize[0][0],3))*255,0
+                        for pt in undCoord:
+                            center = (int(np.round(pt[0]*16)),int(np.round(pt[1]*16)))
+                            circle(img,center,10,(255,0,0),5,shift=4)
+                            putText(img,str(k),(int(center[0]/16)-15, int(center[1]/16)-15),FONT_HERSHEY_SIMPLEX,0.5,(255,0,0),2) 
+                            k+=1
+                        imshow('verbose',img)
+                        moveWindow(str(0), 0,350)
+                        waitKey(1)
                         # add ordered makers to database
-                        self.data[idx].append(np.concatenate((undCoord.reshape(6),[time,imgNumber])))
+                        self.data[idx].append(np.concatenate((undCoord.reshape(undCoord.shape[0]*2),[time,imgNumber])))
                         counter[idx]+=1
                         lastTime[idx]=time
                         self.invalid[idx]=0
                         # interpolate
-                        if not counter[idx]%10: 
+                        '''if not counter[idx]%10: 
                             if counter[idx]>10: pts = np.array(self.data[idx][-11:])  
                             else: pts = np.array(self.data[idx][-10:])                        
                             coord,time = pts[:,0:6],pts[:,6]/1e6

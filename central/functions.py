@@ -73,13 +73,13 @@ def getFourthMarker(coord):
     area = []
     for i in allCombinationsOf3:
         x,y,z=coord[i]
-        area.append(0.5*(x[0]*(y[1]-z[1])+y[0]*(z[1]-x[1])+z[0]*(x[1]-y[1])))
+        area.append(abs(0.5*(x[0]*(y[1]-z[1])+y[0]*(z[1]-x[1])+z[0]*(x[1]-y[1]))))
     return allCombinationsOf3[np.argmin(area)]
 
 def getMissingNo(A):
     n,sum_of_A = len(A)-1,sum(A)
     total = (n + 1)*(n + 2)/2
-    return total - sum_of_A
+    return int(total - sum_of_A)
 
 def processCentroids_test(coord,a0,b0):
     # INIT VARIABLES
@@ -124,7 +124,7 @@ def processCentroids_test(coord,a0,b0):
 
 def processCentroids_calib(coord,a0,b0,cameraMatrix,distCoef):  
     undCoord = np.copy(coord)
-    for i in range(0,3):
+    for i in range(0,int(coord.shape[0])):
         undCoord[i] = [undCoord[i][0]+b0-5,undCoord[i][1]+a0-5] 
     undCoord = myUndistortPointsFisheye(undCoord,cameraMatrix,distCoef)  
     return undCoord
