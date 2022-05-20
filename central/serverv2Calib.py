@@ -23,9 +23,10 @@ class myServer(object):
         self.bufferSize,self.server_socket = 1024,socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
         self.server_socket.bind(('0.0.0.0',8888))
         # internal variables
-        self.data,self.verbose,self.addDic,self.capture,self.myIPs,self.counter= [],verbose,{},np.ones(self.numberCameras,dtype=np.bool),[],0
+        self.data,self.verbose,self.addDic,self.capture,self.myIPs= [],verbose,{},np.ones(self.numberCameras,dtype=np.bool),[]
         for i in range(self.numberCameras): self.data.append([])
-        self.df,self.invalid,self.missed = np.zeros((int(self.recTime/self.step),self.numberCameras*6+1)),np.zeros(self.numberCameras,dtype=np.uint8),np.zeros(self.numberCameras,dtype=np.uint8)
+        self.invalid,self.missed = np.zeros(self.numberCameras,dtype=np.uint8),np.zeros(self.numberCameras,dtype=np.uint8)
+        self.df = np.zeros((self.nImages,self.numberCameras*6+1))
         self.df[:,-1] = np.linspace(0,self.recTime,self.nImages)
 
     # CONNECT WITH CLIENTS
@@ -121,10 +122,15 @@ class myServer(object):
     def collect(self):
         # internal variables
         print('[INFO] waiting capture')
-        coRout = self.myProcessing()
-        coRout.__next__()
+        counter,lastTime = np.zeros(self.numberCameras,dtype=np.uint16),np.zeros(self.numberCameras,dtype=np.uint32)
+        swap,certainty = np.zeros(self.numberCameras,dtype=np.uint16),np.zeros(self.numberCameras,dtype=np.bool8)
+        lastImgNumber,tol = np.zeros(self.numberCameras,dtype=np.int32),0.25
+        intervals,timeIntervals = [],[]
+        for i in range(self.numberCameras): 
+            intervals.append([])
+            timeIntervals.append([])
+        # capture loop
         try:
-            counter,lastTime,lastInterp = np.zeros(self.numberCameras,dtype=np.uint16),np.zeros(self.numberCameras),np.zeros(self.numberCameras)
             while np.any(self.capture):
                 #  RECEIVE MESSAGE
                 bytesPair = self.server_socket.recvfrom(self.bufferSize)
@@ -152,65 +158,82 @@ class myServer(object):
                         # check if there is an obstruction between the blobs
                         for [A,B,C] in undCoord.reshape([-1, 3, 2]):
                             if np.linalg.norm(A-B)<(size[0]+size[1])/2 or np.linalg.norm(A-C)<(size[0]+size[2])/2 or np.linalg.norm(B-C)<(size[1]+size[2])/2: 
-                                print('occlusion')
+                                if self.verbose: print('occlusion')
                                 self.missed[idx]+=1
                                 self.invalid[idx]+=1
                                 continue
                         # if ts if not read corectly, discard
                         if counter[idx]:
                             if time-lastTime[idx]>1e7: 
-                                print('time missmatch')
+                                if self.verbose: print('time missmatch')
                                 self.missed[idx]+=1
                                 self.invalid[idx]+=1
                                 continue
-                        # order markers and check collinearity
-                        if isCollinear(*undCoord) or not isEqual(undCoord) or np.any(undCoord<0):     
-                            if self.invalid[idx]>=10 or not counter[idx]: prev = []        
+                        # check if sequence is valid
+                        if imgNumber>lastImgNumber[idx]+1: self.invalid[idx] = imgNumber-lastImgNumber[idx]
+                        # order markers per proximity and check collinearity
+                        if isCollinear(*undCoord) and not isEqual(undCoord,5) and not np.any(undCoord<0):     
+                            if self.invalid[idx]>=10 or not counter[idx]: 
+                                if certainty[idx]:
+                                    beg,end = intervals[idx][-1],counter[idx]-1
+                                    timeIntervals[idx].append([self.data[idx][beg][6],self.data[idx][end][6]])
+                                prev,certainty[idx] = [],False
+                                intervals[idx].append(counter[idx])
                             else: prev = np.array(self.data[idx][-1][0:6]).reshape(1,-2)
                             undCoord, _ = orderCenterCoord(undCoord,prev)
                             undCoord = np.array(undCoord)
-                        else: # discard
-                            print('not collinear or equal centroids')
+                        else: 
+                            if self.verbose: print('not collinear or equal centroids')
                             self.missed[idx]+=1
                             self.invalid[idx]+=1
                             continue
-                        # add ordered makers to database
-                        self.data[idx].append(np.concatenate((undCoord.reshape(6),[time,imgNumber])))
+                        # update loop variables
+                        lastTime[idx],lastImgNumber[idx],self.invalid[idx] = time,imgNumber,0
                         counter[idx]+=1
-                        lastTime[idx]=time
-                        self.invalid[idx]=0
-                        # interpolate
-                        if not counter[idx]%10: 
-                            if counter[idx]>10: pts = np.array(self.data[idx][-11:])  
-                            else: pts = np.array(self.data[idx][-10:])                        
-                            coord,time = pts[:,0:6],pts[:,6]/1e6
-                            lowBound,highBound = math.ceil(time[0]/self.step),math.floor(time[-1]/self.step)
-                            tNew = np.linspace(lowBound,highBound,int((highBound-lowBound))+1,dtype=np.uint16)
-                            self.df[tNew,int(idx*6):int(idx*6+6)] = self.myInterpol(time,coord,tNew)
-                            lastInterp[idx] = tNew[-1]
-                            if np.min(lastInterp)>self.counter: coRout.send(np.min(lastInterp))
-
-        finally:
-            # last interpolation loop
-            for idx in range(0,self.numberCameras):
-                pts = np.array(self.data[idx][-11:])  
-                coord,time = pts[:,0:6],pts[:,6]/1e6
-                if np.any(time>self.recTime): 
-                    pts = np.array(self.data[idx][-11:(-11+np.argmax(time>self.recTime))])  
-                    coord,time = pts[:,0:6],pts[:,6]/1e6
-                lowBound,highBound = math.ceil(time[0]/self.step),math.floor(time[-1]/self.step)
-                tNew = np.linspace(lowBound,highBound,int((highBound-lowBound))+1,dtype=np.uint16)
-                self.df[tNew,int(idx*6):int(idx*6+6)] = self.myInterpol(time,coord,tNew)
-                lastInterp[idx] = tNew[-1]
-                if np.min(lastInterp)>self.counter: coRout.send(np.min(lastInterp))
+                        self.data[idx].append(np.hstack((undCoord.reshape(6),time)))
+                        # check if ABC is in order smaller to largest
+                        if not certainty[idx]:
+                            for [A,B,C] in undCoord.reshape([-1, 3, 2]):
+                                if np.linalg.norm(C-B)/np.linalg.norm(A-B)>(2-tol) and np.linalg.norm(C-B)>20:
+                                    swap[idx] += 1
+                                    if swap[idx]>5: 
+                                        swap[idx],certainty[idx] = 0,True
+                                        self.data[idx][intervals[idx][-1]:counter[idx]][0:2],self.data[idx][intervals[idx][-1]:counter[idx]][4:6]=self.data[idx][intervals[idx][-1]:counter[idx]][4:6],self.data[idx][intervals[idx][-1]:counter[idx]][0:2]
+                                if np.linalg.norm(A-B)/np.linalg.norm(C-B)>(2-tol) and np.linalg.norm(A-B)>20: certainty[idx] = True
+        finally:        
             # close everything
-            coRout.send(0)
             self.server_socket.close()
             destroyAllWindows()
+            # last interpolation loop
+            for idx in range(self.numberCameras):
+                if certainty[idx]:
+                    beg,end = intervals[idx][-1],counter[idx]-1
+                    timeIntervals[idx].append([self.data[idx][beg][6],self.data[idx][end][6]])    
+                self.data[idx] = np.array(self.data[idx])
+            # compute valid time intersection for interpolation
+            intersections = [[max(first[0], second[0]), min(first[1], second[1])]  
+                                for first in timeIntervals[0] for second in timeIntervals[1]  
+                                if max(first[0], second[0]) <= min(first[1], second[1])]
+            print(timeIntervals)
+            print(intersections)
+            # interpolation dataset
+            for [beg,end] in intersections:
+                for idx in range(self.numberCameras):
+                    validIdx = [i for i in range(0,len(self.data[idx])) if beg<=self.data[idx][i][-1]<=end]
+                    coord,time = self.data[idx][validIdx,0:6],self.data[idx][validIdx,6]/1e6
+                    lowBound,highBound = math.ceil(time[0]/self.step),math.floor(time[-1]/self.step)
+                    print('interpolated #'+str(idx+1)+' from '+str(round(lowBound*self.step,2))+'s to '+str(round(highBound*self.step,2))+'s')
+                    tNew = np.linspace(lowBound,highBound,int((highBound-lowBound))+1,dtype=np.uint16)
+                    ff = CubicSpline(time,coord,axis=0)
+                    self.df[tNew,int(idx*6):int(idx*6+6)] = ff(tNew*self.step)
+            self.df = np.delete(self.df,np.unique([i for i in range(0,self.df.shape[0]) for idx in range(self.numberCameras) if not np.any(self.df[i][idx*6:idx*6+6])]),axis=0)
+            centroids1,centroids2 = self.df[:,0:6].reshape(-1,2),self.df[:,6:12].reshape(-1,2)    
+            # print results
             print('[RESULTS] server results are')
             for i in range(self.numberCameras): print('  >> camera '+str(i)+': '+str(len(self.data[i]))+' captured valid images images, address '+str(self.myIPs[i][0])+', missed '+str(int(self.missed[i]))+' images')
             #plot the beautiful stuff
-            #savetxt('data.csv', data, delimiter=',')
+            np.savetxt('cam1.csv', np.array(self.data[0]), delimiter=',')
+            np.savetxt('cam2.csv', np.array(self.data[1]), delimiter=',')
             for i in range(self.numberCameras):       
                 _,axs = plt.subplots(3, 2,figsize=(10,20),dpi=100)
                 axs[0,0].plot(np.array(self.data[i])[:,6]/1e6, np.array(self.data[i])[:,0], 'o',label='40 FPS') 
@@ -243,7 +266,7 @@ class myServer(object):
                 plt.show()
 
     # COROUTINE TO CREATE INTERPOLATION DATABASE
-    def myProcessing(self):        
+    '''def myProcessing(self):        
         idxBase,idxCompare,hasPrevious,centroids1,centroids2,swap=0,1,False,[0],[0],False
         while True:
             try: 
@@ -390,7 +413,7 @@ class myServer(object):
                             else: centroids1,centroids2 = np.vstack((centroids1, pts1[i].reshape(-1,2))),np.vstack((centroids2, pts2[i].reshape(-1,2)))
                             hasPrevious = True
                             ### VERBOSE
-                            '''if self.verbose:
+                            if self.verbose:
                                 img1,img2,k = np.ones((self.imageSize[0][1],self.imageSize[0][0],3))*255,np.ones((self.imageSize[0][1],self.imageSize[0][0],3))*255,0
                                 for k in range(0,3):
                                     pt1,pt2 = pts1.reshape(-1,2)[k],pts2.reshape(-1,2)[k]
@@ -402,11 +425,11 @@ class myServer(object):
                                 imshow('verbose',np.hstack((img1,img2)))
                                 moveWindow(str(idxBase), 0,350)
                                 waitKey(1)
-                            ### VERBOSE'''
+                            ### VERBOSE
                     # first time, just update and consider the first valid counter
                     self.counter=np.copy(tNew)
             except GeneratorExit: return
-            #except: continue
+            except: continue'''
 
 # parser for command line
 parser = argparse.ArgumentParser(description='''Server for the MoCap system at the Erobotica lab of UFCG.
