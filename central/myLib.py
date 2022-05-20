@@ -11,10 +11,10 @@ def isCollinear(p0, p1, p2):
     res = (m < 1)
     return res
 
-def isEqual(pt):
+def isEqual(pt,tol=5):
     A,B,C = pt[0],pt[1],pt[2]
     AB,AC,BC = np.linalg.norm(A-B),np.linalg.norm(A-C),np.linalg.norm(C-B)
-    return min(AB,AC,BC)<5
+    return min(AB,AC,BC)<tol
 
 def getPreviousCentroid(noPrevious, lastCentroid):
     if not noPrevious: return []
