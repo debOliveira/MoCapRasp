@@ -63,31 +63,27 @@ def findNearestC(nearestA, nearestB): # get the numer missing from the array [0,
 
 def orderCenterCoord(centerCoord, prevCenterCoord, otherCamOrder = 0):
     centerX, centerY = reshapeCoord(centerCoord)
-
     # if it is the first image of the sequence
     if len(prevCenterCoord) == 0:  
-        order,_ =  getOrder(centerX,centerY)         
-
+        order,_ =  getOrder(centerX,centerY)  
         # if it is the second camera
         if otherCamOrder != 0:  
             # if the markers are wrong, swap the extremities
             signal, valid = getSignal(centerX[order[0]], centerX[order[2]],5)
-            if signal != otherCamOrder and valid:
-                order = swapElements(order, 0, 2)    
+            if signal != otherCamOrder and valid: order = swapElements(order, 0, 2)    
         else:        
             # get base for comparision (first camera only)        
             otherCamOrder,_ = getSignal(centerX[order[0]], centerX[order[2]])
-
         # sort centers        
-        sortedCenterCoord = np.array((centerCoord[order[0]], centerCoord[order[1]], centerCoord[order[2]]))
+        if np.linalg.norm(centerX[order[0]]-centerX[order[1]])>np.linalg.norm(centerX[order[2]]-centerX[order[1]]):
+            sortedCenterCoord = np.array((centerCoord[order[0]], centerCoord[order[1]], centerCoord[order[2]]))
+        else: sortedCenterCoord = np.array((centerCoord[order[2]], centerCoord[order[1]], centerCoord[order[0]]))
     else:
         # first reshape array of coordinates
         prevCenterX,prevCenterY = reshapeCoord(prevCenterCoord)
-
         # distance from marker A/B of previous img to center coordiantes of actual img
         distA = np.sqrt(np.power(np.subtract(prevCenterX[0], centerX), 2) + np.power(np.subtract(prevCenterY[0], centerY), 2))
         distB = np.sqrt(np.power(np.subtract(prevCenterX[1], centerX), 2) + np.power(np.subtract(prevCenterY[1], centerY), 2))
-
         # nearest marker from A is selected and removed as marker B candidate
         nearestA = np.argmin(distA)
         distBCopy = np.delete(distB, nearestA)
@@ -97,7 +93,6 @@ def orderCenterCoord(centerCoord, prevCenterCoord, otherCamOrder = 0):
         distBCopy = np.delete(distBCopy, nearestBCopy)
         # get the missing marker position in array
         nearestC = findNearestC(nearestA, nearestB[0])
-
         # sort centers        
         sortedCenterCoord = [centerCoord[nearestA], centerCoord[nearestB[0]], centerCoord[nearestC]]
         # check if the ordering is ok
@@ -107,8 +102,8 @@ def orderCenterCoord(centerCoord, prevCenterCoord, otherCamOrder = 0):
         if (order[1] != 1) or (order[2] != prevOrder[2]):
             if prevOrder[0] == 2: order = swapElements(order,0,2) #if is decreasing, swap                
             sortedCenterCoord = np.array((sortedCenterCoord[order[0]], sortedCenterCoord[order[1]], sortedCenterCoord[order[2]]))
-
     return sortedCenterCoord, otherCamOrder
+
 
 def mySVD(E):
     U,Ddiag,V = np.linalg.svd(E)
