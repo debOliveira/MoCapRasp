@@ -75,12 +75,12 @@ class myServer(object):
                 camIntris[0][0],camIntris[0][2]=ratio*camIntris[0][0],ratio*camIntris[0][2]
                 camIntris[1][1],camIntris[1][2]=ratio*camIntris[1][1],ratio*camIntris[1][2]
             else:
-                print('conversion for intrinsics matrix not known')
+                print('[ERROR] conversion for intrinsics matrix not known')
                 return False,camIntris
             print('[INFO] intrisics known')
             return True,camIntris
         else:
-            print('out of proportion of the camera mode')
+            print('[ERROR] out of proportion of the camera mode')
             return False,camIntris
 
     # COLLECT POINTS FROM CLIENTS, ORDER AND TRIGGER INTERPOLATION
@@ -106,10 +106,11 @@ class myServer(object):
                 address,sizeMsg = bytesPair[1],len(message)
                 idx = self.addDic[address[0]]
                 if not (sizeMsg-1): capture[idx] = 0
-
+                # if valid message
                 if capture[idx]: # check if message is valid
                     if sizeMsg < 13: # if less than 3 blobs, discard
                         if self.verbose: print('[ERROR] '+str(int((sizeMsg-4)/3))+' markers were found')
+                        missed[idx]+=1
                     else: 
                         msg = message[0:sizeMsg-4].reshape(-1,3)
                         coord,size = msg[:,0:2],msg[:,2].reshape(-1)
@@ -133,7 +134,7 @@ class myServer(object):
                         # if ts if not read corectly, discard
                         if counter[idx]:
                             if abs(time-lastTime[idx])>1e9: 
-                                if self.verbose: print('time missmatch')
+                                if self.verbose: print('[WARNING] time missmatch')
                                 missed[idx]+=1
                                 invalid[idx]+=1
                                 continue
@@ -144,32 +145,34 @@ class myServer(object):
                             if invalid[idx]>=10 or not counter[idx]: 
                                 if certainty[idx]:
                                     beg,end = intervals[idx][-1],counter[idx]-1
-                                    timeIntervals[idx].append([dfOrig[idx][beg][6],dfOrig[idx][end][6]])
-                                    print('camera #'+str(idx)+' valid from '+str(round(dfOrig[idx][beg][6]/1e6,2))+'s to '+str(round(dfOrig[idx][end][6]/1e6,2))+'s')
+                                    timeIntervals[idx].append([dfOrig[idx][beg,6],dfOrig[idx][end,6]])
+                                    print('[WARNING] camera #'+str(idx)+' valid from '+str(round(dfOrig[idx][beg,6]/1e6,2))+'s to '+str(round(dfOrig[idx][end][6]/1e6,2))+'s')
                                 prev,certainty[idx] = [],False
                                 intervals[idx].append(counter[idx])
-                            else: prev = np.array(dfOrig[idx][-1][0:6]).reshape(1,-2)
+                            else: 
+                                if not (counter[idx]-1): prev = np.array(dfOrig[idx][0:6]).reshape(-1,2)
+                                else: prev = np.array(dfOrig[idx][-1,0:6]).reshape(-1,2)
                             undCoord, _ = orderCenterCoord(undCoord,prev)
                             undCoord = np.array(undCoord)
                         else: 
-                            if self.verbose: print('not collinear or equal centroids')
+                            if self.verbose: print('[WARNING] not collinear or equal centroids')
                             missed[idx]+=1
                             invalid[idx]+=1
                             continue
                         # update loop variables
                         lastTime[idx],lastImgNumber[idx],invalid[idx] = time,imgNumber,0
+                        if not counter[idx]: dfOrig[idx] = np.hstack((undCoord.reshape(6),time))
+                        else: dfOrig[idx] = np.vstack((dfOrig[idx],np.hstack((undCoord.reshape(6),time))))
                         counter[idx]+=1
-                        dfOrig[idx].append(np.hstack((undCoord.reshape(6),time)))
                         # check if ABC is in order smaller to largest
                         if not certainty[idx]:
                             for [A,B,C] in undCoord.reshape([-1, 3, 2]):
                                 if np.linalg.norm(A-B)/np.linalg.norm(C-B)>(2-tol) and np.linalg.norm(A-B)>20:
                                     swap[idx] += 1
-                                    if swap[idx]>2:                                         
+                                    if swap[idx]>2:    
                                         swap[idx],certainty[idx] = 0,True
-                                        dfOrig[idx][intervals[idx][-1]:counter[idx]][0:2],dfOrig[idx][intervals[idx][-1]:counter[idx]][4:6]=dfOrig[idx][intervals[idx][-1]:counter[idx]][4:6],dfOrig[idx][intervals[idx][-1]:counter[idx]][0:2]
-                                if np.linalg.norm(C-B)/np.linalg.norm(A-B)>(2-tol) and np.linalg.norm(C-B)>20: 
-                                    certainty[idx] = True
+                                        dfOrig[idx][intervals[idx][-1]:counter[idx],0:2],dfOrig[idx][intervals[idx][-1]:counter[idx],4:6] = np.copy(dfOrig[idx][intervals[idx][-1]:counter[idx],4:6]),np.copy(dfOrig[idx][intervals[idx][-1]:counter[idx],0:2])
+                                if np.linalg.norm(C-B)/np.linalg.norm(A-B)>(2-tol) and np.linalg.norm(C-B)>20:  certainty[idx] = True
                                             
         finally:        
             # close everything
@@ -177,11 +180,11 @@ class myServer(object):
             destroyAllWindows()
             # get last interval
             for idx in range(self.numberCameras):
+                if not len(dfOrig[idx]): continue
                 if certainty[idx]:
                     beg,end = intervals[idx][-1],counter[idx]-1
-                    timeIntervals[idx].append([dfOrig[idx][beg][6],dfOrig[idx][end][6]])    
-                    print('camera #'+str(idx)+' valid from '+str(round(dfOrig[idx][beg][6]/1e6,2))+'s to '+str(round(dfOrig[idx][end][6]/1e6,2))+'s')
-                dfOrig[idx] = np.array(dfOrig[idx])
+                    timeIntervals[idx].append([dfOrig[idx][beg,6],dfOrig[idx][end,6]])    
+                    print('[INFO] camera #'+str(idx)+' valid from '+str(round(dfOrig[idx][beg,6]/1e6,2))+'s to '+str(round(dfOrig[idx][end,6]/1e6,2))+'s')
             # compute valid time intersection for interpolation
             intersections = [[max(first[0], second[0]), min(first[1], second[1])]  
                                 for first in timeIntervals[0] for second in timeIntervals[1]  
@@ -191,11 +194,11 @@ class myServer(object):
             dfInterp[:,-1] = np.linspace(0,self.recTime,self.nImages)
             for [beg,end] in intersections:
                 for idx in range(self.numberCameras):
-                    validIdx = [i for i in range(0,dfOrig[idx].shape[0]) if beg<=dfOrig[idx][i][-1]<=end]
+                    validIdx = [i for i in range(0,len(dfOrig[idx])) if beg<=dfOrig[idx][i,-1]<=end]
                     coord,time = dfOrig[idx][validIdx,0:6],dfOrig[idx][validIdx,6]/1e6
                     if time.shape[0]<=2: continue
                     lowBound,highBound = math.ceil(time[0]/self.step),math.floor(time[-1]/self.step)
-                    print('interpolated #'+str(idx+1)+' from '+str(round(lowBound*self.step,2))+'s to '+str(round(highBound*self.step,2))+'s')
+                    print('[INFO] interpolated #'+str(idx+1)+' from '+str(round(lowBound*self.step,2))+'s to '+str(round(highBound*self.step,2))+'s')
                     tNew = np.linspace(lowBound,highBound,int((highBound-lowBound))+1,dtype=np.uint16)
                     ff = CubicSpline(time,coord,axis=0)
                     dfInterp[tNew,int(idx*6):int(idx*6+6)] = ff(tNew*self.step)
@@ -212,56 +215,34 @@ class myServer(object):
                 np.savetxt('cam1_original.csv', np.array(dfOrig[0]), delimiter=',')
                 np.savetxt('cam2_original.csv', np.array(dfOrig[1]), delimiter=',')
             # get fundamental and essential matrices
-            F,_ = estimateFundMatrix_8norm(np.array(centroids1),np.array(centroids2))
-            E = np.matmul(self.cameraMat[1].T, np.matmul(F, self.cameraMat[0]))
-            print("\nEssenc. Mat.\n", E.round(4))
+            print('[INFO] Computing fundamental and essential matrix')
+            try: 
+                F,_ = estimateFundMatrix_8norm(np.array(centroids1),np.array(centroids2),verbose=False)
+                E = np.matmul(self.cameraMat[1].T, np.matmul(F, self.cameraMat[0]))
             # decompose to rotation and translation between cameras
-            R, t = decomposeEssentialMat(E, self.cameraMat[0], self.cameraMat[1], np.array(centroids1), np.array(centroids2))
-            if np.any(np.isnan(R)): print('no valid rotation matrix')
-            else:
-                print("\nRot. Mat.\n", R.round(4))
-                print("\nTrans. Mat.\n", t.round(4))
-            # plot the beautiful stuff
+                R, t = decomposeEssentialMat(E, self.cameraMat[0], self.cameraMat[1], np.array(centroids1), np.array(centroids2))
+                if np.any(np.isnan(R)): 
+                    print('[ERROR] no valid rotation matrix')
+                    return
+                else:
+                    if self.verbose:
+                        print("\nRot. Mat.\n", R.round(4))
+                        print("\nTrans. Mat.\n", t.round(4))
+            except: 
+                print('[ERROR] no valid rotation matrix')
+                return
             P1,P2 = np.hstack((self.cameraMat[0], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[1], np.hstack((R, t.T)))
             projPt1,projPt2 = myProjectionPoints(np.array(centroids1)),myProjectionPoints(np.array(centroids2))
             points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
             points3d = (points4d[:3, :]/points4d[3, :]).T
             if points3d[0, 2] < 0: points3d = -points3d
-            tot,L_real_AC,L_real_AB,L_real_BC,L_AC_vec,L_BC_vec,L_AB_vec,k,false_idx = 0,15.7,10.2,5.5,[],[],[],0,[]
+            tot,L_real_AC,L_real_AB,L_real_BC,k,false_idx = 0,15.7,5.5,10.2,0,[]
             # compute sdt deviation and plot beautiful stuff
             for [A, B, C] in points3d.reshape([-1, 3, 3]):
                 L_rec_AC,L_rec_BC,L_rec_AB = np.linalg.norm(A-C),np.linalg.norm(B-C),np.linalg.norm(A-B)
-                if L_rec_AB<L_rec_BC: L_rec_AB,L_rec_BC=L_rec_BC,L_rec_AB
                 tot = tot + L_real_AC/L_rec_AC + L_real_BC/L_rec_BC + L_real_AB/L_rec_AB
-                k = k + 3
-                lamb = tot/k
-                L_AC_vec.append(L_rec_AC)
-                L_BC_vec.append(L_rec_BC)
-                L_AB_vec.append(L_rec_AB)
-            print('Scale between real world and triang. point cloud is: ', lamb.round(2))
-            print('L_AC >> mean = ' + str((np.mean(L_AC_vec)*lamb).round(4)) +
-                "cm, std. dev = " + str((np.std(L_AC_vec)*lamb).round(4)) +
-                "cm, rms = " + str((np.sqrt(np.mean(np.square(np.array(L_AC_vec)*lamb-L_real_AC)))).round(4)) + "cm")
-            print('L_AB >> mean = ' + str((np.mean(L_AB_vec)*lamb).round(4)) +
-                "cm, std. dev = " + str((np.std(L_AB_vec)*lamb).round(4)) +
-                "cm, rms = " + str((np.sqrt(np.mean(np.square(np.array(L_AB_vec)*lamb-L_real_AB)))).round(4)) + "cm")
-            print('L_BC >> mean = ' + str((np.mean(L_BC_vec)*lamb).round(4)) +
-                "cm, std. dev = " + str((np.std(L_BC_vec)*lamb).round(4)) +
-                "cm, rms = " + str((np.sqrt(np.mean(np.square(np.array(L_BC_vec)*lamb-L_real_BC)))).round(4)) + "cm")
-            fig = plt.figure(figsize=(10, 6), dpi=100)
-            L_AC_vec_plot,L_BC_vec_plot,L_AB_vec_plot = np.array(L_AC_vec)*lamb - L_real_AC,np.array(L_BC_vec)*lamb - L_real_BC,np.array(L_AB_vec)*lamb - L_real_AB
-            plt.plot(L_AC_vec_plot, '-o', label="std_AC")
-            plt.plot(L_BC_vec_plot, '-o', label="std_BC")
-            plt.plot(L_AB_vec_plot, '-o', label="std_AB")
-            plt.axhline(y=0.0, color='r', linestyle='-')
-            plt.grid()
-            plt.xlabel("Image number")
-            plt.ylabel("Deviation to mean value (cm)")
-            plt.legend()
-            ax = fig.axes
-            ax[0].minorticks_on()
-            plt.grid(which='both')
-            plt.xlim(0,len(L_AC_vec)-1)
+                k+=3
+            lamb = tot/k
             points3d_new,i,k= points3d*lamb,0,0
             for [A, B, C] in points3d_new.reshape([-1, 3, 3]):
                 L_reconst = np.sqrt(np.sum((A-C)**2, axis=0))
@@ -270,44 +251,45 @@ class myServer(object):
                     i = i + 1
                     false_idx.extend((k,k+1,k+2))
                 k+=3
-            print("Images distant more than 1% from the real value = " + str(i)+'/'+str(int(points3d.shape[0]/3)))
-            plt.draw()
-            plt.show()
-            centroids1,centroids2=np.delete(centroids1,false_idx,axis=0),np.delete(centroids2,false_idx,axis=0)
+            print("[INFO] Images distant more than 1% from the real value = " + str(i)+'/'+str(int(points3d.shape[0]/3)))
+            # refining estimation
+            print("[INFO] Refining fundamental matrix estimation")
+            centroids1,centroids2=np.delete(np.copy(centroids1),false_idx,axis=0),np.delete(np.copy(centroids2),false_idx,axis=0)
             # get fundamental and essential matrices
-            F,_ = estimateFundMatrix_8norm(np.array(centroids1),np.array(centroids2))
-            E = np.matmul(cameraMatrix_cam2.T, np.matmul(F, cameraMatrix_cam1))
-            print("\nEssenc. Mat.\n", E.round(4))
+            F,_ = estimateFundMatrix_8norm(np.copy(centroids1),np.copy(centroids2))
+            E = np.matmul(self.cameraMat[1].T, np.matmul(F, self.cameraMat[0]))
             # decompose to rotation and translation between cameras
-            R, t = decomposeEssentialMat(E, cameraMatrix_cam1, cameraMatrix_cam2, np.array(centroids1), np.array(centroids2))
-            if np.any(np.isnan(R)): print('no valid rotation matrix')
+            R, t = decomposeEssentialMat(E, self.cameraMat[0], self.cameraMat[1], np.copy(centroids1), np.copy(centroids2))
+            if np.any(np.isnan(R)): 
+                print('[ERROR] no valid rotation matrix')
+                return
             else:
-                print("\nRot. Mat.\n", R.round(4))
-                print("\nTrans. Mat.\n", t.round(4))
-            P1,P2 = np.hstack((cameraMatrix_cam1, [[0.], [0.], [0.]])),np.matmul(cameraMatrix_cam2, np.hstack((R, t.T)))
-            projPt1,projPt2 = myProjectionPoints(np.array(centroids1)),myProjectionPoints(np.array(centroids2))
+                if self.verbose:
+                    print("\nRot. Mat.\n", R.round(4))
+                    print("\nTrans. Mat.\n", t.round(4))
+            P1,P2 = np.hstack((self.cameraMat[0], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[1], np.hstack((R, t.T)))
+            projPt1,projPt2 = myProjectionPoints(np.copy(centroids1)),myProjectionPoints(np.copy(centroids2))
             points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
             points3d = (points4d[:3, :]/points4d[3, :]).T
             if points3d[0, 2] < 0: points3d = -points3d
-            tot,L_real_AC,L_real_AB,L_real_BC,L_AC_vec,L_BC_vec,L_AB_vec,k,false_idx = 0,15.7,10.2,5.5,[],[],[],0,[]
+            tot,L_AC_vec,L_BC_vec,L_AB_vec,k = 0,[],[],[],0
             # compute sdt deviation and plot beautiful stuff
             for [A, B, C] in points3d.reshape([-1, 3, 3]):
                 L_rec_AC,L_rec_BC,L_rec_AB = np.linalg.norm(A-C),np.linalg.norm(B-C),np.linalg.norm(A-B)
-                if L_rec_AB<L_rec_BC: L_rec_AB,L_rec_BC=L_rec_BC,L_rec_AB
                 tot = tot + L_real_AC/L_rec_AC + L_real_BC/L_rec_BC + L_real_AB/L_rec_AB
-                k = k + 3
-                lamb = tot/k
+                k+=3
                 L_AC_vec.append(L_rec_AC)
                 L_BC_vec.append(L_rec_BC)
                 L_AB_vec.append(L_rec_AB)
-            print('Scale between real world and triang. point cloud is: ', lamb.round(2))
-            print('L_AC >> mean = ' + str((np.mean(L_AC_vec)*lamb).round(4)) +
+            lamb = tot/k
+            print('[INFO] Scale between real world and triang. point cloud is: ', lamb.round(2))
+            print('[INFO] L_AC >> mean = ' + str((np.mean(L_AC_vec)*lamb).round(4)) +
                 "cm, std. dev = " + str((np.std(L_AC_vec)*lamb).round(4)) +
                 "cm, rms = " + str((np.sqrt(np.mean(np.square(np.array(L_AC_vec)*lamb-L_real_AC)))).round(4)) + "cm")
-            print('L_AB >> mean = ' + str((np.mean(L_AB_vec)*lamb).round(4)) +
+            print('[INFO] L_AB >> mean = ' + str((np.mean(L_AB_vec)*lamb).round(4)) +
                 "cm, std. dev = " + str((np.std(L_AB_vec)*lamb).round(4)) +
                 "cm, rms = " + str((np.sqrt(np.mean(np.square(np.array(L_AB_vec)*lamb-L_real_AB)))).round(4)) + "cm")
-            print('L_BC >> mean = ' + str((np.mean(L_BC_vec)*lamb).round(4)) +
+            print('[INFO] L_BC >> mean = ' + str((np.mean(L_BC_vec)*lamb).round(4)) +
                 "cm, std. dev = " + str((np.std(L_BC_vec)*lamb).round(4)) +
                 "cm, rms = " + str((np.sqrt(np.mean(np.square(np.array(L_BC_vec)*lamb-L_real_BC)))).round(4)) + "cm")
             fig = plt.figure(figsize=(10, 6), dpi=100)
@@ -325,44 +307,34 @@ class myServer(object):
             ax[0].minorticks_on()
             plt.grid(which='both')
             plt.xlim(0,len(L_AC_vec)-1)
-            points3d_new,i= points3d*lamb,0
-            for [A, B, C] in points3d_new.reshape([-1, 3, 3]):
-                L_reconst = np.sqrt(np.sum((A-C)**2, axis=0))
-                valid = abs(L_real_AC-L_reconst)/L_real_AC < 0.01
-                if not valid: i = i + 1
-            print("Images distant more than 1% from the real value = " + str(i)+'/'+str(int(points3d.shape[0]/3)))
             plt.draw()
             plt.show()
             # epipolar lines
             img1,img2,k = np.ones((540,960))*255,np.ones((540,960))*255,100
             pts1,pts2 = np.int32(centroids1[k:k+3].reshape(-1,2)),np.int32(centroids2[k:k+3].reshape(-1,2))
-            from cv2 import line
-
-            def drawlines(img1,img2,lines,pts1,pts2):
-                ''' img1 - image on which we draw the epilines for the points in img2
-                    lines - corresponding epilines '''
-                r,c = img1.shape
-                img1 = cvtColor(img1.astype('float32'),COLOR_GRAY2BGR)
-                img2 = cvtColor(img2.astype('float32'),COLOR_GRAY2BGR)
-                for r,pt1,pt2 in zip(lines,pts1,pts2):
-                    color = (0,0,0)
-                    x0,y0 = map(int, [0, -r[2]/r[1] ])
-                    x1,y1 = map(int, [c, -(r[2]+r[0]*c)/r[1] ])
-                    img1 = line(img1, (x0,y0), (x1,y1), color,1)
-                    img1 = circle(img1,tuple(pt1),5,color,-1)
-                    img2 = circle(img2,tuple(pt2),5,color,-1)
-                return img1,img2
-
             lines1 = computeCorrespondEpilines(pts2.reshape(-1,1,2), 2,F)
             lines1 = lines1.reshape(-1,3)
-            img5,_ = drawlines(img1,img2,lines1,pts1,pts2)
+            img5,_ = self.drawlines(img1,img2,lines1,pts1,pts2)
             lines2 = computeCorrespondEpilines(pts1.reshape(-1,1,2), 1,F)
             lines2 = lines2.reshape(-1,3)
-            img3,_ = drawlines(img2,img1,lines2,pts2,pts1)
+            img3,_ = self.drawlines(img2,img1,lines2,pts2,pts1)
             plt.figure(figsize=(20, 16))
             plt.subplot(121),plt.imshow(img5)
             plt.subplot(122),plt.imshow(img3)
             plt.show()
+    
+    def drawlines(self,img1,img2,lines,pts1,pts2):
+        r,c = img1.shape
+        img1 = cvtColor(img1.astype('float32'),COLOR_GRAY2BGR)
+        img2 = cvtColor(img2.astype('float32'),COLOR_GRAY2BGR)
+        for r,pt1,pt2 in zip(lines,pts1,pts2):
+            color = (0,0,0)
+            x0,y0 = map(int, [0, -r[2]/r[1] ])
+            x1,y1 = map(int, [c, -(r[2]+r[0]*c)/r[1] ])
+            img1 = line(img1, (x0,y0), (x1,y1), color,1)
+            img1 = circle(img1,tuple(pt1),5,color,-1)
+            img2 = circle(img2,tuple(pt2),5,color,-1)
+        return img1,img2
  
             
 # parser for command line
