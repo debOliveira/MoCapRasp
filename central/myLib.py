@@ -197,7 +197,7 @@ def erroReprojection(F,pts1,pts2):  # pts are Nx3 array of homogenous coordinate
     print("max x'Fx=0:",np.max(err))
     return np.mean(err)
 
-def estimateFundMatrix_8norm(pts1,pts2):
+def estimateFundMatrix_8norm(pts1,pts2,verbose=True):
     # get number of matched points
     numPoints = pts1.shape[0]
     # transform to normalized points
@@ -226,9 +226,9 @@ def estimateFundMatrix_8norm(pts1,pts2):
         # normalise F
         F = F/np.linalg.norm(F)
         if F[-1,-1] < 0: F = -F
-        print("Fund. Mat.\n", F.round(4))
-        erroReprojection(F,np.vstack((pts1.T,np.ones((1,pts1.shape[0])))),
-                   np.vstack((pts2.T,np.ones((1,pts2.shape[0])))))
+        if verbose:
+            print("Fund. Mat.\n", F.round(4))
+            erroReprojection(F,np.vstack((pts1.T,np.ones((1,pts1.shape[0])))),np.vstack((pts2.T,np.ones((1,pts2.shape[0])))))
         return F,True
     else:
         return 0,False
