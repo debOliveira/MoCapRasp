@@ -106,7 +106,7 @@ class myServer(object):
                     a,b,time,imgNumber = message[-4],message[-3],message[-2],int(message[-1]) 
                     if not len(coord): continue
                     # undistort points
-                    if address[0] == '192.168.0.102': undCoord = processCentroids_calib(coord,a,b,self.cameraMat[0],distCoef_cam1)
+                    if address[0] == self.firstIP: undCoord = processCentroids_calib(coord,a,b,self.cameraMat[0],distCoef_cam1)
                     else: undCoord = processCentroids_calib(coord,a,b,self.cameraMat[1],distCoef_cam2)     
                     if self.save and undCoord.shape[0]==4: dfSave.append(np.concatenate((undCoord.reshape(undCoord.shape[0]*undCoord.shape[1]),[time,imgNumber,idx])))
                                             
@@ -115,7 +115,7 @@ class myServer(object):
             self.server_socket.close()
             destroyAllWindows()
             # save results
-            if self.save: np.savetxt('cam_all.csv', np.array(dfSave), delimiter=',')
+            if self.save: np.savetxt('camTest.csv', np.array(dfSave), delimiter=',')
  
             
 # parser for command line

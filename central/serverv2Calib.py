@@ -121,7 +121,7 @@ class myServer(object):
                         # store message parameters
                         a,b,time,imgNumber = message[-4],message[-3],message[-2],int(message[-1]) 
                         # undistort points
-                        if address[0] == '192.168.0.102': undCoord = processCentroids_calib(coord,a,b,self.cameraMat[0],distCoef_cam1)
+                        if address[0] == self.firstIP: undCoord = processCentroids_calib(coord,a,b,self.cameraMat[0],distCoef_cam1)
                         else: undCoord = processCentroids_calib(coord,a,b,self.cameraMat[1],distCoef_cam2)
                         # check if there is an obstruction between the blobs
                         '''for [A,B,C] in undCoord.reshape([-1, 3, 2]):
@@ -210,10 +210,10 @@ class myServer(object):
             for i in range(self.numberCameras): print('  >> camera '+str(i)+': '+str(len(dfOrig[i]))+' captured valid images images, address '+str(self.myIPs[i][0])+', missed '+str(int(missed[i]))+' images')
             # save results
             if self.save: 
-                np.savetxt('cam_all.csv', np.array(dfSave), delimiter=',')
-                np.savetxt('cam_interp.csv', np.array(dfInterp), delimiter=',')
-                np.savetxt('cam1_original.csv', np.array(dfOrig[0]), delimiter=',')
-                np.savetxt('cam2_original.csv', np.array(dfOrig[1]), delimiter=',')
+                np.savetxt('camCalib.csv', np.array(dfSave), delimiter=',')
+                #np.savetxt('cam_interp.csv', np.array(dfInterp), delimiter=',')
+                #np.savetxt('cam1_original.csv', np.array(dfOrig[0]), delimiter=',')
+                #np.savetxt('cam2_original.csv', np.array(dfOrig[1]), delimiter=',')
             # get fundamental and essential matrices
             print('[INFO] Computing fundamental and essential matrix')
             try: 
@@ -267,10 +267,10 @@ class myServer(object):
                 if self.verbose:
                     print("\nRot. Mat.\n", R.round(4))
                     print("\nTrans. Mat.\n", t.round(4))
-                    np.savetxt('R.csv', np.array(R), delimiter=',')
-                    np.savetxt('t.csv', np.array(t), delimiter=',')
-                    np.savetxt('lamb.csv', np.array(lamb), delimiter=',')
-                    np.savetxt('F.csv', np.array(F), delimiter=',')
+                np.savetxt('R.csv', np.array(R), delimiter=',')
+                np.savetxt('t.csv', np.array(t), delimiter=',')
+                np.savetxt('lamb.csv', np.array([lamb]), delimiter=',')
+                np.savetxt('F.csv', np.array(F), delimiter=',')
             P1,P2 = np.hstack((self.cameraMat[0], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[1], np.hstack((R, t.T)))
             projPt1,projPt2 = myProjectionPoints(np.copy(centroids1)),myProjectionPoints(np.copy(centroids2))
             points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
@@ -331,13 +331,16 @@ class myServer(object):
         r,c = img1.shape
         img1 = cvtColor(img1.astype('float32'),COLOR_GRAY2BGR)
         img2 = cvtColor(img2.astype('float32'),COLOR_GRAY2BGR)
+        listColors = [(0,0,255),(0,255,0),(255,0,0)]
+        i = 0
         for r,pt1,pt2 in zip(lines,pts1,pts2):
-            color = (0,0,0)
+            color = listColors[i]
             x0,y0 = map(int, [0, -r[2]/r[1] ])
             x1,y1 = map(int, [c, -(r[2]+r[0]*c)/r[1] ])
             img1 = line(img1, (x0,y0), (x1,y1), color,1)
             img1 = circle(img1,tuple(pt1),5,color,-1)
             img2 = circle(img2,tuple(pt2),5,color,-1)
+        i+=1
         return img1,img2
  
             
