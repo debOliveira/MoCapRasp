@@ -267,6 +267,10 @@ class myServer(object):
                 if self.verbose:
                     print("\nRot. Mat.\n", R.round(4))
                     print("\nTrans. Mat.\n", t.round(4))
+                    np.savetxt('R.csv', np.array(R), delimiter=',')
+                    np.savetxt('t.csv', np.array(t), delimiter=',')
+                    np.savetxt('lamb.csv', np.array(lamb), delimiter=',')
+                    np.savetxt('F.csv', np.array(F), delimiter=',')
             P1,P2 = np.hstack((self.cameraMat[0], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[1], np.hstack((R, t.T)))
             projPt1,projPt2 = myProjectionPoints(np.copy(centroids1)),myProjectionPoints(np.copy(centroids2))
             points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
