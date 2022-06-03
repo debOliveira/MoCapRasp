@@ -157,7 +157,7 @@ class myServer(object):
                         if not counter[idx]: dfOrig[idx] = np.hstack((undCoord.reshape(8),time))
                         counter[idx]+=1
                     # do I have enough points?
-                    if np.all(counter>1): break                                            
+                    if np.all(counter>0): break                                            
         finally:        
             # close everything
             self.server_socket.close()
