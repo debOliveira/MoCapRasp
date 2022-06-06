@@ -132,7 +132,7 @@ class myServer(object):
         print('[INFO] waiting capture')
         capture,counter = np.ones(self.numberCameras,dtype=np.bool),np.zeros(2,dtype=np.int8)
         dfSave,dfOrig = [],[]
-        for i in self.numberCameras: dfOrig.append([])
+        for i in range(self.numberCameras): dfOrig.append([])
         # capture loop
         try:
             while np.any(capture):
@@ -148,13 +148,15 @@ class myServer(object):
                     coord = msg[:,0:2]
                     # store message parameters
                     a,b,time,imgNumber = message[-4],message[-3],message[-2],int(message[-1]) 
-                    if len(coord): continue
+                    if not len(coord): continue
                     # undistort points
-                    if address[0] == '192.168.0.102': undCoord = processCentroids_calib(coord,a,b,self.cameraMat[0],distCoef_cam1)
+                    if address[0] == self.firstIP: 
+                        print('in')
+                        undCoord = processCentroids_calib(coord,a,b,self.cameraMat[0],distCoef_cam1)
                     else: undCoord = processCentroids_calib(coord,a,b,self.cameraMat[1],distCoef_cam2)     
                     if undCoord.shape[0]==3:
                         if self.save: dfSave.append(np.concatenate((undCoord.reshape(undCoord.shape[0]*undCoord.shape[1]),[time,imgNumber,idx])))
-                        if not counter[idx]: dfOrig[idx] = np.hstack((undCoord.reshape(8),time))
+                        if not counter[idx]: dfOrig[idx] = np.hstack((undCoord.reshape(6),time))
                         counter[idx]+=1
                     # do I have enough points?
                     if np.all(counter>1): break                                            
@@ -163,11 +165,12 @@ class myServer(object):
             self.server_socket.close()
             destroyAllWindows()
             # save results
-            if self.save: np.savetxt('cam_all.csv', np.array(dfSave), delimiter=',')
+            if self.save: np.savetxt('camGround.csv', np.array(dfSave), delimiter=',')
             # import R,T and lambda
-            R,t,lamb,F = np.genfromtxt('R.csv', delimiter=','),np.genfromtxt('t.csv', delimiter=','),np.genfromtxt('lamb.csv', delimiter=','), np.genfromtxt('F.csv', delimiter=',')
+            R,t,lamb,F = np.genfromtxt('R.csv', delimiter=','),np.genfromtxt('t.csv', delimiter=',').reshape(-1,3),np.genfromtxt('lamb.csv', delimiter=','), np.genfromtxt('F.csv', delimiter=',')
+            print(t)
             # select points
-            pts1,pts2,orderSecondFrame = np.int32(dfOrig[0][0:8].reshape(-1,2)),np.int32(dfOrig[1][0:8].reshape(-1,2)),[]
+            pts1,pts2,orderSecondFrame = np.int32(dfOrig[0][0:6].reshape(-1,2)),np.int32(dfOrig[1][0:6].reshape(-1,2)),[]
             for i in range(3):
                 epiline = getEpilineCoef(pts1[i],F)
                 orderSecondFrame.append(np.argmin(getDistance2Line(epiline,pts2)))
@@ -185,8 +188,8 @@ class myServer(object):
             plt.subplot(122),plt.imshow(img3)
             plt.show()
             # triangulate
-            P1,P2 = np.hstack((cameraMatrix_cam1, [[0.], [0.], [0.]])),np.matmul(cameraMatrix_cam2, np.hstack((R, t.T)))
-            projPt1,projPt2 = myProjectionPoints(np.array(pts1[[0,2,3]])),myProjectionPoints(np.array(pts2[[0,2,3]]))
+            P1,P2 = np.hstack((self.cameraMat[0], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[1], np.hstack((R, t.T)))
+            projPt1,projPt2 = myProjectionPoints(np.array(pts1)),myProjectionPoints(np.array(pts2))
             points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
             points3d = (points4d[:3, :]/points4d[3, :]).T
             if points3d[0, 2] < 0: points3d = -points3d
@@ -242,6 +245,7 @@ class myServer(object):
             ax.quiver(cam2Root[0],cam2Root[2],cam2Root[1],z[0],z[2],z[1], arrow_length_ratio=0.1, edgecolors="g")
             ax.scatter(cam2Root[0],cam2Root[2],cam2Root[1], edgecolor="blue", facecolor="gold")
             # new plane
+            cmhot = plt.get_cmap("jet")
             points3dNew = np.matmul(R_plane,points3d.T+np.array([[0],[d/b],[0]])).T
             ax.scatter(points3dNew[:, 0], points3dNew[:, 2]-zDisplacement, points3dNew[:, 1], c=points3dNew[:, 2], cmap=cmhot)
             x,z = np.linspace(-1,1,30),np.linspace(3,5,10)
@@ -249,7 +253,6 @@ class myServer(object):
             Y=(-newPlane[0]*X -newPlane[2]*Z)/newPlane[1]
             surf = ax.plot_surface(X,Z-zDisplacement,Y,color='b',alpha=.15)
             # axis setup
-            cmhot = plt.get_cmap("jet")
             ax.view_init(elev=30, azim=-50) 
             plt.gca().invert_zaxis()
             ax.get_proj = lambda: np.dot(Axes3D.get_proj(ax), np.diag([1., 1., .3, 1.]))
