@@ -373,7 +373,7 @@ class myServer(object):
             ax.set_zlabel('Y')
             # plot first camera
             scale = 0.5
-            cam1Pts = np.array([[0,d/b,0],
+            cam1Pts = np.array([[0,self.t_plane,0],
                                 [scale, 0, 0],
                                 [0, scale, 0],
                                 [0, 0, scale]])
@@ -388,8 +388,8 @@ class myServer(object):
             ax.scatter(cam1Root[0],cam1Root[2],cam1Root[1], edgecolor="blue", facecolor="black")
             # plot second camera
             x,y,z = np.array([scale, 0, 0]), np.array([0, scale, 0]),np.array([0, 0, scale])
-            x,y,z = np.matmul(self.R.T, x),np.matmul(R.T, y),np.matmul(R.T, z)
-            t_aux = np.matmul(-self.t, self.R)[0]*self.lamb/100+[0,d/b,0]
+            x,y,z = np.matmul(self.R.T, x),np.matmul(self.R.T, y),np.matmul(self.R.T, z)
+            t_aux = np.matmul(-self.t, self.R)[0]*self.lamb/100+[0,self.t_plane,0]
             cam2Pts = np.array([t_aux.T,x,y,z])
             cam2PtsNew = np.matmul(self.R_plane,cam2Pts.T).T
             [cam2Root,x,y,z]=cam2PtsNew
