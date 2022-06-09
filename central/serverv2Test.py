@@ -29,7 +29,6 @@ def getTheClosest(coordNow, prev):
                 ambiguousNow = centerCoord[np.argmin(dist)]
                 # get distance from the blob to the previous images centroids
                 dist = np.linalg.norm(ambiguousNow-prevCenterCoord,axis=1)
-                retPrev = dist < 5
                 # get the ambiguous index to previous image
                 idxNow = np.where(retNow)[0]
                 idxPrev = np.argsort(dist)[0:len(idxNow)]
@@ -248,16 +247,16 @@ class myServer(object):
                 if not (sizeMsg-1): capture[idx] = 0
                 # if valid message
                 if capture[idx]: # check if message is valid
-                    if sizeMsg != 16: # if less than 4 blobs, discard
+                    if sizeMsg < 16: # if less than 4 blobs, discard
                         if self.verbose: print('[ERROR] '+str(int((sizeMsg-4)/3))+' markers were found')
                         missed[idx]+=1
                     else: 
                         msg = message[0:sizeMsg-4].reshape(-1,3)
                         coord,size = msg[:,0:2],msg[:,2].reshape(-1)
                         # if more than 4 blobs are found, get the four biggest
-                        #if sizeMsg > 16: 
-                        #    orderAscDiameters = np.argsort(size)
-                        #    coord = np.array([coord[orderAscDiameters[-1]],coord[orderAscDiameters[-2]],coord[orderAscDiameters[-3]],coord[orderAscDiameters[-4]]]).reshape(-1,2)
+                        if sizeMsg > 16: 
+                            orderAscDiameters = np.argsort(size)
+                            coord = np.array([coord[orderAscDiameters[-1]],coord[orderAscDiameters[-2]],coord[orderAscDiameters[-3]],coord[orderAscDiameters[-4]]]).reshape(-1,2)
                         # store message parameters
                         a,b,time,imgNumber = message[-4],message[-3],message[-2],int(message[-1]) 
                         # undistort points
