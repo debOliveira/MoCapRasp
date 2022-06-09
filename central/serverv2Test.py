@@ -97,8 +97,8 @@ class myServer(object):
         self.addDic,self.myIPs,self.P= {},[],[]
         for i in range(self.numberCameras):  self.P.append([]) 
         self.R,self.t = np.genfromtxt('R.csv', delimiter=','),np.genfromtxt('t.csv', delimiter=',').reshape(-1,3)
-        self.lamb,self.F = np.genfromtxt('lamb.csv',delimiter=',')[0],np.genfromtxt('F.csv', delimiter=',')
-        self.R_plane,self.t_plane = np.genfromtxt('R_plane.csv', delimiter=','),np.genfromtxt('t_plane.csv', delimiter=',').reshape(-1,3)
+        self.lamb,self.F = np.genfromtxt('lamb.csv',delimiter=','),np.genfromtxt('F.csv', delimiter=',')
+        self.R_plane,self.t_plane = np.genfromtxt('R_plane.csv', delimiter=','),np.genfromtxt('t_plane.csv', delimiter=',')
         
     # CONNECT WITH CLIENTS
     def connect(self):
@@ -234,7 +234,9 @@ class myServer(object):
         for i in range(self.numberCameras): 
             intervals.append([])
             lastTnew.append([])
-            dfOrig.append([])        
+            dfOrig.append([])    
+        dfInterp = np.zeros((self.nImages,self.numberCameras*8+1))
+        dfInterp[:,-1] = np.linspace(0,self.recTime,self.nImages)  
         # capture loop
         try:
             while np.any(capture):
@@ -246,16 +248,16 @@ class myServer(object):
                 if not (sizeMsg-1): capture[idx] = 0
                 # if valid message
                 if capture[idx]: # check if message is valid
-                    if sizeMsg < 16: # if less than 4 blobs, discard
+                    if sizeMsg != 16: # if less than 4 blobs, discard
                         if self.verbose: print('[ERROR] '+str(int((sizeMsg-4)/3))+' markers were found')
                         missed[idx]+=1
                     else: 
                         msg = message[0:sizeMsg-4].reshape(-1,3)
                         coord,size = msg[:,0:2],msg[:,2].reshape(-1)
                         # if more than 4 blobs are found, get the four biggest
-                        if sizeMsg > 16: 
-                            orderAscDiameters = np.argsort(size)
-                            coord = np.array([coord[orderAscDiameters[-1]],coord[orderAscDiameters[-2]],coord[orderAscDiameters[-3]],coord[orderAscDiameters[-4]]]).reshape(-1,2)
+                        #if sizeMsg > 16: 
+                        #    orderAscDiameters = np.argsort(size)
+                        #    coord = np.array([coord[orderAscDiameters[-1]],coord[orderAscDiameters[-2]],coord[orderAscDiameters[-3]],coord[orderAscDiameters[-4]]]).reshape(-1,2)
                         # store message parameters
                         a,b,time,imgNumber = message[-4],message[-3],message[-2],int(message[-1]) 
                         # undistort points
@@ -307,6 +309,7 @@ class myServer(object):
                                     if len(validIdx1) and len(validIdx2):
                                         # get intersection data
                                         ts1,ts2 = np.copy(ts1[validIdx1]),np.copy(ts2[validIdx2])
+                                        if ts1.shape[0]<2 or ts2.shape[0]<2: continue
                                         coord1,coord2 = dfOrig[0][intervals[0][-1]:counter[0],0:8],dfOrig[1][intervals[1][-1]:counter[1],0:8]
                                         coord1,coord2 = np.copy(coord1[validIdx1]),np.copy(coord2[validIdx2])
                                         # get interpolated data
@@ -337,14 +340,14 @@ class myServer(object):
                                 tNew = np.linspace(lowBound,highBound,int((highBound-lowBound))+1,dtype=np.uint16)
                                 # interpolate
                                 ff = CubicSpline(ts,coord,axis=0)
-                                self.dfInterp[tNew,int(idx*8):int(idx*8+8)] = ff(tNew*self.step)
+                                dfInterp[tNew,int(idx*8):int(idx*8+8)] = ff(tNew*self.step)
                                 lastTnew[idx],otherIdx = tNew[-1],int(not idx)
                                 # for each new interpolated data, check if line is complete
                                 for k in tNew:
                                     # if line is full, triangulate points
-                                    if np.all(self.dfInterp[k,int(otherIdx*8):int(otherIdx*8+8)]):
+                                    if np.all(dfInterp[k,int(otherIdx*8):int(otherIdx*8+8)]):
                                         # get projections points
-                                        centroids1,centroids2 = self.dfInterp[k,0:8].reshape(-1,2),self.dfInterp[k,8:16].reshape(-1,2)
+                                        centroids1,centroids2 = dfInterp[k,0:8].reshape(-1,2),dfInterp[k,8:16].reshape(-1,2)
                                         projPt1,projPt2 = myProjectionPoints(np.array(centroids1)),myProjectionPoints(np.array(centroids2))
                                         # triangulate points
                                         points4d = triangulatePoints(self.P[0].astype(float),self.P[1].astype(float),projPt1.astype(float),projPt2.astype(float))
@@ -361,8 +364,7 @@ class myServer(object):
             # save results
             if self.save: np.savetxt('camTest.csv', np.array(dfSave), delimiter=',')
             # plot results
-            idx = np.array(range(3,points3d.shape[0],4)).astype(int)
-            points3dNew = points3d[idx]*self.lamb/100
+            points3dNew = points3d*self.lamb/100
             fig = plt.figure(figsize=(8, 8))
             ax = plt.axes(projection='3d')
             ax.set_xlim(-1, 4)
@@ -371,8 +373,9 @@ class myServer(object):
             ax.set_xlabel('X')
             ax.set_ylabel('Z')
             ax.set_zlabel('Y')
+            cmhot = plt.get_cmap("jet")
             # plot first camera
-            scale = 0.5
+            scale = 0.8
             cam1Pts = np.array([[0,self.t_plane,0],
                                 [scale, 0, 0],
                                 [0, scale, 0],
@@ -385,7 +388,7 @@ class myServer(object):
             ax.quiver(cam1Root[0],cam1Root[2],cam1Root[1],x[0],x[2],x[1], arrow_length_ratio=0.1, edgecolors="r")
             ax.quiver(cam1Root[0],cam1Root[2],cam1Root[1],y[0],y[2],y[1], arrow_length_ratio=0.1, edgecolors="b")
             ax.quiver(cam1Root[0],cam1Root[2],cam1Root[1],z[0],z[2],z[1], arrow_length_ratio=0.1, edgecolors="g")
-            ax.scatter(cam1Root[0],cam1Root[2],cam1Root[1], edgecolor="blue", facecolor="black")
+            ax.scatter(cam1Root[0],cam1Root[2],cam1Root[1], s=50, edgecolor="fuchsia", facecolor="plum", linewidth=2)
             # plot second camera
             x,y,z = np.array([scale, 0, 0]), np.array([0, scale, 0]),np.array([0, 0, scale])
             x,y,z = np.matmul(self.R.T, x),np.matmul(self.R.T, y),np.matmul(self.R.T, z)
@@ -398,7 +401,7 @@ class myServer(object):
             ax.quiver(cam2Root[0],cam2Root[2],cam2Root[1],x[0],x[2],x[1], arrow_length_ratio=0.1, edgecolors="r")
             ax.quiver(cam2Root[0],cam2Root[2],cam2Root[1],y[0],y[2],y[1], arrow_length_ratio=0.1, edgecolors="b")
             ax.quiver(cam2Root[0],cam2Root[2],cam2Root[1],z[0],z[2],z[1], arrow_length_ratio=0.1, edgecolors="g")
-            ax.scatter(cam2Root[0],cam2Root[2],cam2Root[1], edgecolor="blue", facecolor="gold")
+            ax.scatter(cam2Root[0],cam2Root[2],cam2Root[1], s=50, edgecolor="darkorange", facecolor="gold", linewidth=2)
             # new plane
             points3dNew = np.matmul(self.R_plane,points3dNew.T+np.array([[0],[self.t_plane],[0]])).T
             ax.scatter(points3dNew[:, 0], points3dNew[:, 2]-zDisplacement, points3dNew[:, 1], c=points3dNew[:, 2], cmap=cmhot)
