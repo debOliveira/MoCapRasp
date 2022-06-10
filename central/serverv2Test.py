@@ -25,24 +25,17 @@ def getTheClosest(coordNow, prev):
             # if there is ony one blob tagged as closest
             if np.sum(retNow) <= 1: newOrder[i] = np.argmin(dist)
             else: # if there are ambiguous blobs
-                # get ambiguous blobs index
-                ambiguousNow = centerCoord[np.argmin(dist)]
-                # get distance from the blob to the previous images centroids
-                dist = np.linalg.norm(ambiguousNow-prevCenterCoord,axis=1)
-                # get the ambiguous index to previous image
-                idxNow = np.where(retNow)[0]
-                idxPrev = np.argsort(dist)[0:len(idxNow)]
-                ambiguousPrev = prevCenterCoord[idxPrev]
-                # sort per X
-                if np.all(np.diff(np.sort(ambiguousNow[:,0]))>2) and np.all(np.diff(np.sort(ambiguousPrev[:,0]))>2):
-                    orderNow,orderPrev = np.argsort(ambiguousNow[:,0]),np.argsort(ambiguousPrev[:,0])
-                    idxNow = np.hstack((ambiguousNow,idxNow.reshape(idxNow.shape[0],-1)))[orderNow,-1].T
-                    idxPrev = np.hstack((ambiguousPrev,idxPrev.reshape(idxPrev.shape[0],-1)))[orderPrev,-1].T
-                else: # sort per Y
-                    orderNow,orderPrev = np.argsort(ambiguousNow[:,1]),np.argsort(ambiguousPrev[:,1])
-                    idxNow = np.hstack((ambiguousNow,idxNow.reshape(idxNow.shape[0],-1)))[orderNow,-1].T
-                    idxPrev = np.hstack((ambiguousPrev,idxPrev.reshape(idxPrev.shape[0],-1)))[orderPrev,-1].T            
-                newOrder[idxPrev.astype(int)] = idxNow.astype(int)
+                # get all combinations of prev-actual blobs
+                allPermuationsOf4,allDists = np.array(list(permutations(list(range(0,4))))),[]
+                for idx in allPermuationsOf4:
+                    newPts,dist = centerCoord[idx],0
+                    for k in range(nMarkers): 
+                        aux= np.linalg.norm(prevCenterCoord[k]-newPts[k])
+                        dist+=aux
+                    allDists.append(dist)
+                minDist = np.argmin(allDists)
+                choosenIdx = allPermuationsOf4[minDist]
+                return choosenIdx
     return newOrder
 
 def myInterpolate(coord,ts,step):
@@ -247,17 +240,17 @@ class myServer(object):
                 if not (sizeMsg-1): capture[idx] = 0
                 # if valid message
                 if capture[idx]: # check if message is valid
-                    if sizeMsg < 16: # if less than 4 blobs, discard
+                    if sizeMsg != 16: # if less than 4 blobs, discard
                         if self.verbose: print('[ERROR] '+str(int((sizeMsg-4)/3))+' markers were found')
                         missed[idx]+=1
                     else: 
                         msg = message[0:sizeMsg-4].reshape(-1,3)
                         coord,size = msg[:,0:2],msg[:,2].reshape(-1)
                         # if more than 4 blobs are found, get the four biggest
-                        if sizeMsg > 16: 
+                        '''if sizeMsg > 16: 
                             orderAscDiameters = np.argsort(size)
                             coord = np.array([coord[orderAscDiameters[-1]],coord[orderAscDiameters[-2]],coord[orderAscDiameters[-3]],coord[orderAscDiameters[-4]]]).reshape(-1,2)
-                        # store message parameters
+                        '''# store message parameters
                         a,b,time,imgNumber = message[-4],message[-3],message[-2],int(message[-1]) 
                         # undistort points
                         if address[0] == self.firstIP: undCoord = processCentroids_calib(coord,a,b,self.cameraMat[0],distCoef_cam1)
