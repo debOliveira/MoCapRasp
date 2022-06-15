@@ -207,17 +207,17 @@ class myServer(object):
             [A,B,C] = np.matmul(np.array([a,b,c]),R_plane.T)
             newPlane = np.array([A,B,C])
             # plot
-            points3d = points3d*lamb/100
-            fig = plt.figure(figsize=(8, 8))
+            points3dNew = points3d*lamb/100
+            fig = plt.figure(figsize=(8, 8),dpi=100)
             ax = plt.axes(projection='3d')
             ax.set_xlim(-1, 4)
-            ax.set_zlim(-4, 0)
-            ax.set_ylim(0, 4)
-            ax.set_xlabel('X')
-            ax.set_ylabel('Z')
-            ax.set_zlabel('Y')
+            ax.set_zlim(-5, 0)
+            ax.set_ylim(-1, 4)
+            ax.set_xlabel('X', fontweight='bold',labelpad=15)
+            ax.set_ylabel('Z', fontweight='bold',labelpad=15)
+            ax.set_zlabel('Y', fontweight='bold',labelpad=5)
             # plot first camera
-            scale = 0.5
+            scale = 0.8
             cam1Pts = np.array([[0,d/b,0],
                                 [scale, 0, 0],
                                 [0, scale, 0],
@@ -227,10 +227,10 @@ class myServer(object):
             zDisplacement = cam1PtsNew[0,2]
             cam1Root+=[0,0,-zDisplacement]
             x,y,z=x/np.linalg.norm(x)*scale,y/np.linalg.norm(y)*scale,z/np.linalg.norm(z)*scale
-            ax.quiver(cam1Root[0],cam1Root[2],cam1Root[1],x[0],x[2],x[1], arrow_length_ratio=0.1, edgecolors="r")
-            ax.quiver(cam1Root[0],cam1Root[2],cam1Root[1],y[0],y[2],y[1], arrow_length_ratio=0.1, edgecolors="b")
-            ax.quiver(cam1Root[0],cam1Root[2],cam1Root[1],z[0],z[2],z[1], arrow_length_ratio=0.1, edgecolors="g")
-            ax.scatter(cam1Root[0],cam1Root[2],cam1Root[1], edgecolor="blue", facecolor="black")
+            ax.quiver(cam1Root[0],cam1Root[2],cam1Root[1],x[0],x[2],x[1], arrow_length_ratio=0.1, edgecolors="r", label = 'X axis')
+            ax.quiver(cam1Root[0],cam1Root[2],cam1Root[1],y[0],y[2],y[1], arrow_length_ratio=0.1, edgecolors="b", label = 'Y axis')
+            ax.quiver(cam1Root[0],cam1Root[2],cam1Root[1],z[0],z[2],z[1], arrow_length_ratio=0.1, edgecolors="g", label = 'Z axis')
+            ax.scatter(cam1Root[0],cam1Root[2],cam1Root[1], s=50, edgecolor="fuchsia", facecolor="plum", linewidth=2, label = 'Camera 1')
             # plot second camera
             x,y,z = np.array([scale, 0, 0]), np.array([0, scale, 0]),np.array([0, 0, scale])
             x,y,z = np.matmul(R.T, x),np.matmul(R.T, y),np.matmul(R.T, z)
@@ -243,19 +243,21 @@ class myServer(object):
             ax.quiver(cam2Root[0],cam2Root[2],cam2Root[1],x[0],x[2],x[1], arrow_length_ratio=0.1, edgecolors="r")
             ax.quiver(cam2Root[0],cam2Root[2],cam2Root[1],y[0],y[2],y[1], arrow_length_ratio=0.1, edgecolors="b")
             ax.quiver(cam2Root[0],cam2Root[2],cam2Root[1],z[0],z[2],z[1], arrow_length_ratio=0.1, edgecolors="g")
-            ax.scatter(cam2Root[0],cam2Root[2],cam2Root[1], edgecolor="blue", facecolor="gold")
+            ax.scatter(cam2Root[0],cam2Root[2],cam2Root[1], s=50, edgecolor="darkorange", facecolor="gold", linewidth=2,  label = 'Camera 2')
             # new plane
-            cmhot = plt.get_cmap("jet")
-            points3dNew = np.matmul(R_plane,points3d.T+np.array([[0],[d/b],[0]])).T
-            ax.scatter(points3dNew[:, 0], points3dNew[:, 2]-zDisplacement, points3dNew[:, 1], c=points3dNew[:, 2], cmap=cmhot)
             x,z = np.linspace(-1,1,30),np.linspace(3,5,10)
             X,Z = np.meshgrid(x,z)
             Y=(-newPlane[0]*X -newPlane[2]*Z)/newPlane[1]
-            surf = ax.plot_surface(X,Z-zDisplacement,Y,color='b',alpha=.15)
-            # axis setup
-            ax.view_init(elev=30, azim=-50) 
+            surf = ax.plot_surface(X,Z-zDisplacement,Y,color='b',alpha=.15,label="Wand's plane")
+            surf._facecolors2d = surf._facecolor3d
+            surf._edgecolors2d = surf._edgecolor3d
+            points3dNew = np.matmul(R_plane,points3dNew.T+np.array([[0],[d/b],[0]])).T
+            ax.scatter(points3dNew[:, 0], points3dNew[:, 2]-zDisplacement, points3dNew[:, 1], color='black',s = 50,label='Wand 3D markers')
+            ax.view_init(elev=30, azim=-120)
+            plt.legend(ncol=3,loc ='center',edgecolor='silver', bbox_to_anchor=(0.5, 0.8)) 
             plt.gca().invert_zaxis()
-            ax.get_proj = lambda: np.dot(Axes3D.get_proj(ax), np.diag([1., 1., .3, 1.]))
+            ax.get_proj = lambda: np.dot(Axes3D.get_proj(ax), np.diag([1., 1., .5, 1.]))
+            #plt.savefig('withRot_2.png', bbox_inches='tight')
             plt.draw()
             plt.show()
  
