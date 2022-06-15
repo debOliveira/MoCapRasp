@@ -160,7 +160,7 @@ class myServer(object):
         choosenIdx,allDists = [],[]
         for i in range(nMarkers):
             epilines[i] = getEpilineCoef(pts1[i],self.F)        
-        allPermuationsOf4 = np.array(list(permutations(list(range(0,4)))))
+        allPermuationsOf4 = np.array(list(permutations(list(range(0,nMarkers)))))
         # get all possible distances between point/line
         for idx2 in allPermuationsOf4:
             newPts2,dist = pts2[idx2],0

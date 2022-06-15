@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn import linear_model
+from cv2.fisheye import undistortPoints
 
 def isCollinear(p0, p1, p2):
     X,y = [[p0[0]],[p1[0]],[p2[0]]],[p0[1], p1[1], p2[1]]      
@@ -193,8 +194,8 @@ def erroReprojection(F,pts1,pts2):  # pts are Nx3 array of homogenous coordinate
     # how well F satisfies the equation pt1 * F * pt2 == 0
     vals = np.matmul(pts2.T,np.matmul(F,pts1))
     err = np.abs(vals)
-    print("avg x'Fx=0:",np.mean(err))
-    print("max x'Fx=0:",np.max(err))
+    print("\t\t> avg x'Fx=0:",np.mean(err))
+    print("\t\t> max x'Fx=0:",np.max(err))
     return np.mean(err)
 
 def estimateFundMatrix_8norm(pts1,pts2,verbose=True):
@@ -227,8 +228,29 @@ def estimateFundMatrix_8norm(pts1,pts2,verbose=True):
         F = F/np.linalg.norm(F)
         if F[-1,-1] < 0: F = -F
         if verbose:
-            print("Fund. Mat.\n", F.round(4))
+            #print("Fund. Mat.\n", F.round(4))
             erroReprojection(F,np.vstack((pts1.T,np.ones((1,pts1.shape[0])))),np.vstack((pts2.T,np.ones((1,pts2.shape[0])))))
         return F,True
     else:
         return 0,False
+
+def myUndistortPointsFisheye(pts,K,D):
+    # save variables
+    pts,fx,fy,cx,cy = pts.reshape(-1,1,2),K[0,0],K[1,1],K[0,2],K[1,2]
+    # remove destortion
+    undPts_norm = undistortPoints(pts, K, D)
+    undPts_norm = undPts_norm.reshape(-1,2)
+    # remove normalization
+    undistPts= np.zeros_like(undPts_norm)
+    for i, (x, y) in enumerate(undPts_norm):
+        px,py = x*fx + cx,y*fy + cy
+        undistPts[i,0],undistPts[i,1] = px,py
+    return undistPts
+
+def processCentroids(coord,a0,b0,cameraMatrix,distCoef):  
+    undCoord = np.copy(coord)
+    for i in range(0,int(coord.shape[0])):
+        undCoord[i] = [undCoord[i][0]+b0-5,undCoord[i][1]+a0-5] 
+    undCoord = myUndistortPointsFisheye(undCoord,cameraMatrix,distCoef)  
+    return undCoord
+

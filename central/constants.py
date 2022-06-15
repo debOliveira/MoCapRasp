@@ -18,7 +18,14 @@ params.minRepeatability =  1
 detector = SimpleBlobDetector_create(params)
 allIdx = list(range(0,4))
 allCombinationsOf3 = np.array(list(combinations(allIdx,3)))
-cameraMatrix =np.array([[816.188,0,318.382],
-                                [0,814.325,250.263],
-                                [0,0,1]])
-distCoef = np.array([[-0.292355],[0.199853],[0.386838],[-6.51433]], dtype=np.float32)
+
+# camera matrices
+cameraMatrix_cam1 =np.array([[720.313,0,481.014],[0,719.521,360.991],[0,0,1]])
+distCoef_cam1 = np.array([[0.395621],[0.633705],[-2.41723],[2.11079]], dtype=np.float32)
+
+cameraMatrix_cam2 =np.array([[768.113,0.,472.596],[0.,767.935,350.978],[0,0,1]])
+distCoef_cam2 = np.array([[0.368917],[1.50111],[-7.94126],[11.9171]], dtype=np.float32)
+
+# all in one
+cameraMat = [cameraMatrix_cam1,cameraMatrix_cam2]
+distCoef = [distCoef_cam1,distCoef_cam2]

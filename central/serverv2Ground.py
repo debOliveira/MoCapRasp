@@ -1,14 +1,14 @@
 # IMPORTS >>> DO NOT CHANGE <<<
 import warnings
 warnings.filterwarnings("ignore")
-import socket,time,math,argparse
+import socket,time,argparse
 import numpy as np
-from functions import processCentroids_calib,cameraMatrix_cam1,cameraMatrix_cam2,distCoef_cam1,distCoef_cam2
-from cv2 import circle,COLOR_GRAY2RGB,destroyAllWindows,triangulatePoints,cvtColor,line,COLOR_GRAY2BGR,computeCorrespondEpilines
-from myLib import orderCenterCoord,estimateFundMatrix_8norm,decomposeEssentialMat,myProjectionPoints,isCollinear,isEqual,getSignal
+from cv2 import circle,COLOR_GRAY2RGB,destroyAllWindows,triangulatePoints,cvtColor,line,computeCorrespondEpilines
+from myLib import myProjectionPoints,processCentroids
+from constants import cameraMat,distCoef
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from scipy.interpolate import CubicSpline
+from itertools import permutations,combinations
 
 def isEqual4(pt,tol=5):
     A,B,C,D = pt[0],pt[1],pt[2],pt[3]
@@ -20,12 +20,11 @@ def getEpilineCoef(pts,F):
     [a,b,c]=np.matmul(F,np.hstack((pts,1))) #ax+by+c=0
     return [a,b,c]/(np.sqrt(pow(a,2)+pow(b,2)))
 
-def getDistance2Line(line,pts):
-    a,b,c = line
-    out = []
-    for [x,y] in pts:
-        out.append(abs(a*x+b*y+c)/np.sqrt(np.sqrt(pow(a,2)+pow(b,2))))
-    return np.array(out)    
+def getDistance2Line(lines,pts):
+    pts,out,lines = np.copy(pts).reshape(-1,2),[],np.copy(lines).reshape(-1,3)
+    for [a,b,c] in lines:
+        for [x,y] in pts: out.append(abs(a*x+b*y+c)/np.sqrt(np.sqrt(pow(a,2)+pow(b,2))))
+    return np.array(out)<5,np.array(out)   
 
 def drawlines(img1,img2,lines,pts1,pts2):
     r,c = img1.shape
@@ -53,38 +52,112 @@ def findPlane(A,C,D):
     d=(-a*x1-b*y1-c*z1)
     return np.array([a,b,c,d])
 
+def getOrderPerEpiline(coord1,coord2,nMarkers,F,verbose = 0):
+    # get data
+    pts1,pts2,orderSecondFrame = np.copy(coord1).reshape(-1,2),np.copy(coord2).reshape(-1,2),np.ones(nMarkers,dtype=np.int8)*-1
+    epilines = np.zeros((nMarkers,3))
+    choosenIdx,allDists = [],[]
+    for i in range(nMarkers):
+        epilines[i] = getEpilineCoef(pts1[i],F)        
+    allPermuationsOf4 = np.array(list(permutations(list(range(0,nMarkers)))))
+    # get all possible distances between point/line
+    for idx2 in allPermuationsOf4:
+        newPts2,dist = pts2[idx2],0
+        for k in range(nMarkers):
+            _,aux= getDistance2Line(epilines[k],newPts2[k])
+            dist+=aux
+        allDists.append(dist)
+    # get minimum distance
+    minDist = min(allDists)
+    # get all idx with 1 pixels distance from the mininum distance combination
+    choosenIdx = allPermuationsOf4[np.where(allDists<=minDist+1)[0]]
+    # id there are more than 1 combination possible, find ambiguous blobs
+    if len(choosenIdx)>1:
+        # initiate variables
+        allCombinationsOf2 = np.array(list(combinations(list(range(0,len(choosenIdx))),2)))
+        mask = np.ones(nMarkers,dtype=np.bool)
+        # get common idx from all ambiguous combinations
+        for idx in allCombinationsOf2:
+            nowMask = np.equal(choosenIdx[idx[0]],choosenIdx[idx[1]])
+            mask*=nowMask
+        # invert mask to find the blobs that differs in each image
+        mask = np.invert(mask)
+        idxAmbiguous1,idxAmbiguous2 = np.where(mask)[0],choosenIdx[0][mask]
+        collinearPts1,collinearPts2 = pts1[idxAmbiguous1],pts2[idxAmbiguous2]
+        # sort per X
+        if np.all(np.diff(np.sort(collinearPts2[:,0]))>2) and np.all(np.diff(np.sort(collinearPts1[:,0]))>2):
+            order1,order2 = np.argsort(collinearPts1[:,0]),np.argsort(collinearPts2[:,0])
+            idx1 = np.hstack((collinearPts1,idxAmbiguous1.reshape(idxAmbiguous1.shape[0],-1)))[order1,-1].T
+            idx2 = np.hstack((collinearPts2,idxAmbiguous2.reshape(idxAmbiguous2.shape[0],-1)))[order2,-1].T
+        else: # sort per Y
+            order1,order2 = np.argsort(collinearPts1[:,1]),np.argsort(collinearPts2[:,1])
+            idx1 = np.hstack((collinearPts1,idxAmbiguous1.reshape(idxAmbiguous1.shape[0],-1)))[order1,-1].T
+            idx2 = np.hstack((collinearPts2,idxAmbiguous2.reshape(idxAmbiguous2.shape[0],-1)))[order2,-1].T
+        orderSecondFrame = choosenIdx[0]
+        orderSecondFrame[idx1.astype(int)] = idx2.astype(int)
+    else: orderSecondFrame = choosenIdx[0]
+
+    ## verbose
+    if verbose:
+        pts2 = np.copy(pts2[orderSecondFrame])
+        img1,img2 = np.ones((720,960))*255,np.ones((720,960))*255
+        lines1 = computeCorrespondEpilines(np.int32(pts2).reshape(-1,1,2), 2,F)
+        lines1 = lines1.reshape(-1,3)
+        img5,_ = drawlines(img1,img2,lines1,np.int32(pts1),np.int32(pts2))
+        lines2 = computeCorrespondEpilines(np.int32(pts1).reshape(-1,1,2), 1,F)
+        lines2 = lines2.reshape(-1,3)
+        img3,_ = drawlines(img2,img1,lines2,np.int32(pts2),np.int32(pts1))
+        plt.figure(figsize=(20, 16),dpi=100)
+        plt.subplot(121),plt.imshow(img5)
+        plt.subplot(122),plt.imshow(img3)
+        plt.show()
+    return orderSecondFrame
+
 class myServer(object):
-    def __init__(self,numberCameras,triggerTime,recTime,FPS,verbose,output,save,firstIP):
+    def __init__(self,numberCameras,triggerTime,recTime,FPS,verbose,output,save,ipList):
         ##########################################
-        # PLEASE CHANGE JUST THE VARIABLES BELOW #
+        # PLEASE DONT CHANGE THE VARIABLES BELOW #
         ##########################################
-        self.numberCameras,self.triggerTime,self.recTime,self.step,self.out,self.save,self.verbose,self.firstIP = numberCameras,triggerTime,recTime,1/FPS,output,save,verbose,firstIP
-        self.cameraMat = np.array([cameraMatrix_cam1,cameraMatrix_cam2])
+        self.numberCameras,self.triggerTime,self.recTime,self.step,self.out,self.save,self.verbose,self.ipList = numberCameras,triggerTime,recTime,1/FPS,output,save,verbose,np.array(ipList.split(','))
+        # check number of ips
+        if self.ipList.shape[0]!=self.numberCameras:
+            print('[ERROR] Number of cameras do not match the number of IPs given')
+            exit()
+        self.cameraMat,self.distCoef = np.copy(cameraMat),np.copy(distCoef)
         # do not change below this line, socket variables
         self.nImages,self.imageSize = int(self.recTime/self.step),[]
+        for i in range(self.numberCameras): self.imageSize.append([])
         print('[INFO] creating server')
         self.bufferSize,self.server_socket = 1024,socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
         self.server_socket.bind(('0.0.0.0',8888))
-        # internal variables
-        self.addDic,self.myIPs= {},[]
 
     # CONNECT WITH CLIENTS
     def connect(self):
         print("[INFO] server running, waiting for clients")
-        for i in range(self.numberCameras):
+        addedCams,ports,k=[],[],0
+        while k!=self.numberCameras:
             # COLLECT ADDRESSES
             message,address = self.server_socket.recvfrom(self.bufferSize)
-            self.imageSize.append(np.array(message.decode("utf-8").split(",")).astype(np.int))
-            self.addDic[address[0]]=i
-            self.myIPs.append(address)
-            print('[INFO] client '+str(len(self.addDic))+' connected at '+str(address[0]))
-            ret,newCamMatrix=self.myIntrinsics(self.cameraMat[i],self.imageSize[i][0],self.imageSize[i][1],self.imageSize[i][2])
-            if ret: self.cameraMat[i]=np.copy(newCamMatrix)
-            else: break
+            # CHECK IF IS IN IP LIST
+            if not len(np.where(self.ipList==address[0])[0]):
+                print('[ERROR] IP '+address[0]+' not in the list')
+                exit()
+            # GET IMAGE SIZE
+            idx = np.where(self.ipList==address[0])[0][0]
+            if idx in addedCams: continue
+            self.imageSize[idx] = np.array(message.decode("utf-8").split(",")).astype(np.int)
+            print('[INFO] camera '+str(idx)+' connected at '+str(address[0]))
+            # REDO INTRINSICS
+            ret,newCamMatrix=self.myIntrinsics(self.cameraMat[idx],self.imageSize[idx][0],self.imageSize[idx][1],self.imageSize[idx][2])
+            if ret: self.cameraMat[idx]=np.copy(newCamMatrix)
+            else: exit()
+            k+=1
+            addedCams.append(idx)
+            ports.append(address)
         # SEND TRIGGER 
         print('[INFO] all clients connected')
         self.triggerTime += time.time()
-        for i in range(self.numberCameras): self.server_socket.sendto((str(self.triggerTime)+' '+str(self.recTime)).encode(),tuple(self.myIPs[i]))
+        for i in range(self.numberCameras): self.server_socket.sendto((str(self.triggerTime)+' '+str(self.recTime)).encode(),tuple(ports[i]))
         print('[INFO] trigger sent')
 
     # NEW INTRINSICS
@@ -120,7 +193,6 @@ class myServer(object):
             else:
                 print('conversion for intrinsics matrix not known')
                 return False,camIntris
-            print('[INFO] intrisics known')
             return True,camIntris
         else:
             print('out of proportion of the camera mode')
@@ -140,7 +212,7 @@ class myServer(object):
                 bytesPair = self.server_socket.recvfrom(self.bufferSize)
                 message = np.frombuffer(bytesPair[0],dtype=np.float64)
                 address,sizeMsg = bytesPair[1],len(message)
-                idx = self.addDic[address[0]]
+                idx = np.where(self.ipList==address[0])[0][0]
                 if not (sizeMsg-1): capture[idx] = 0
 
                 if capture[idx]: # check if message is valid
@@ -150,16 +222,13 @@ class myServer(object):
                     a,b,time,imgNumber = message[-4],message[-3],message[-2],int(message[-1]) 
                     if not len(coord): continue
                     # undistort points
-                    if address[0] == self.firstIP: 
-                        print('in')
-                        undCoord = processCentroids_calib(coord,a,b,self.cameraMat[0],distCoef_cam1)
-                    else: undCoord = processCentroids_calib(coord,a,b,self.cameraMat[1],distCoef_cam2)     
+                    undCoord = processCentroids(coord,a,b,self.cameraMat[idx],distCoef[idx])
                     if undCoord.shape[0]==3:
                         if self.save: dfSave.append(np.concatenate((undCoord.reshape(undCoord.shape[0]*undCoord.shape[1]),[time,imgNumber,idx])))
                         if not counter[idx]: dfOrig[idx] = np.hstack((undCoord.reshape(6),time))
                         counter[idx]+=1
                     # do I have enough points?
-                    if np.all(counter>0): break                                            
+                    if np.all(counter[0:2]>0): break                                  
         finally:        
             # close everything
             self.server_socket.close()
@@ -167,14 +236,17 @@ class myServer(object):
             # save results
             if self.save: np.savetxt('camGround.csv', np.array(dfSave), delimiter=',')
             # import R,T and lambda
-            R,t,lamb,F = np.genfromtxt('R.csv', delimiter=','),np.genfromtxt('t.csv', delimiter=',').reshape(-1,3),np.genfromtxt('lamb.csv', delimiter=','), np.genfromtxt('F.csv', delimiter=',')
-            print(t)
+            rotation = np.genfromtxt('R.csv', delimiter=',').reshape(-1,3,3)
+            translation= np.genfromtxt('t.csv', delimiter=',').reshape(-1,1,3)
+            scaleLamb,FMatrices = np.genfromtxt('lamb.csv', delimiter=','), np.genfromtxt('F.csv', delimiter=',').reshape(-1,3,3)
+            # get matrices
+            if rotation.shape[0]==2: R,t,lamb,F = rotation[1],translation[1],scaleLamb,FMatrices.reshape(3,3)
+            else: R,t,lamb,F = rotation[1],translation[1],scaleLamb[0],FMatrices[0]
             # select points
-            pts1,pts2,orderSecondFrame = np.int32(dfOrig[0][0:6].reshape(-1,2)),np.int32(dfOrig[1][0:6].reshape(-1,2)),[]
-            for i in range(3):
-                epiline = getEpilineCoef(pts1[i],F)
-                orderSecondFrame.append(np.argmin(getDistance2Line(epiline,pts2)))
+            pts1,pts2 = dfOrig[0][0:6].reshape(-1,2),dfOrig[1][0:6].reshape(-1,2)
+            orderSecondFrame = getOrderPerEpiline(pts1,pts2,3,np.copy(F))
             pts2 = np.copy(pts2[orderSecondFrame])
+            pts1,pts2 = np.int32(pts1),np.int32(pts2)
             # plot epipolar lines
             img1,img2 = np.ones((540,960))*255,np.ones((540,960))*255
             lines1 = computeCorrespondEpilines(pts2.reshape(-1,1,2), 2,F)
@@ -273,7 +345,7 @@ parser.add_argument('--verbose',help='show points capture after end of recording
 parser.add_argument('--help', action='help', default=argparse.SUPPRESS, help='show this help message and exit.')
 parser.add_argument('-out', help='write the rotation matrix and translation vector(default: off)',default=False, action='store_true')
 parser.add_argument('-save',help='save received packages to CSV (default: off)',default=False, action='store_true')
-parser.add_argument('-ip',type=str,help='IP from first camera (default: 192.168.0.102)',default='192.168.0.102')
+parser.add_argument('-ip',type=str,help='List of IPs of each camera, in order',default='')
 args = parser.parse_args()
 
 myServer_ = myServer(args.n,args.trig,args.rec,args.fps,args.verbose,args.out,args.save,args.ip)

@@ -3,45 +3,73 @@ import warnings
 warnings.filterwarnings("ignore")
 import socket,time,math,argparse
 import numpy as np
-from functions import processCentroids_calib,cameraMatrix_cam1,cameraMatrix_cam2,distCoef_cam1,distCoef_cam2
 from cv2 import circle,destroyAllWindows,triangulatePoints,cvtColor,line,COLOR_GRAY2BGR,computeCorrespondEpilines
-from myLib import orderCenterCoord,estimateFundMatrix_8norm,decomposeEssentialMat,myProjectionPoints,isCollinear,isEqual,getSignal
+from myLib import orderCenterCoord,estimateFundMatrix_8norm,decomposeEssentialMat,myProjectionPoints,isCollinear,isEqual,processCentroids
+from constants import cameraMat,distCoef
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from scipy.interpolate import CubicSpline
 
+def drawlines(img1,img2,lines,pts1,pts2):
+    r,c = img1.shape
+    img1 = cvtColor(img1.astype('float32'),COLOR_GRAY2BGR)
+    img2 = cvtColor(img2.astype('float32'),COLOR_GRAY2BGR)
+    listColors = [(0,0,255),(0,255,0),(255,0,0)]
+    i = 0
+    for r,pt1,pt2 in zip(lines,pts1,pts2):
+        color = listColors[i]
+        x0,y0 = map(int, [0, -r[2]/r[1] ])
+        x1,y1 = map(int, [c, -(r[2]+r[0]*c)/r[1] ])
+        img1 = line(img1, (x0,y0), (x1,y1), color,1)
+        img1 = circle(img1,tuple(pt1),5,color,-1)
+        img2 = circle(img2,tuple(pt2),5,color,-1)
+    i+=1
+    return img1,img2
+
 class myServer(object):
-    def __init__(self,numberCameras,triggerTime,recTime,FPS,verbose,output,save,firstIP):
+    def __init__(self,numberCameras,triggerTime,recTime,FPS,verbose,output,save,ipList):
         ##########################################
-        # PLEASE CHANGE JUST THE VARIABLES BELOW #
+        # PLEASE DONT CHANGE THE VARIABLES BELOW #
         ##########################################
-        self.numberCameras,self.triggerTime,self.recTime,self.step,self.out,self.save,self.verbose,self.firstIP = numberCameras,triggerTime,recTime,1/FPS,output,save,verbose,firstIP
-        self.cameraMat = np.array([cameraMatrix_cam1,cameraMatrix_cam2])
+        self.numberCameras,self.triggerTime,self.recTime,self.step,self.out,self.save,self.verbose,self.ipList = numberCameras,triggerTime,recTime,1/FPS,output,save,verbose,np.array(ipList.split(','))
+        # check number of ips
+        if self.ipList.shape[0]!=self.numberCameras:
+            print('[ERROR] Number of cameras do not match the number of IPs given')
+            exit()
+        self.cameraMat,self.distCoef = np.copy(cameraMat),np.copy(distCoef)
         # do not change below this line, socket variables
         self.nImages,self.imageSize = int(self.recTime/self.step),[]
+        for i in range(self.numberCameras): self.imageSize.append([])
         print('[INFO] creating server')
         self.bufferSize,self.server_socket = 1024,socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
         self.server_socket.bind(('0.0.0.0',8888))
-        # internal variables
-        self.addDic,self.myIPs= {},[]
 
     # CONNECT WITH CLIENTS
     def connect(self):
         print("[INFO] server running, waiting for clients")
-        for i in range(self.numberCameras):
+        addedCams,ports,k=[],[],0
+        while k!=self.numberCameras:
             # COLLECT ADDRESSES
             message,address = self.server_socket.recvfrom(self.bufferSize)
-            self.imageSize.append(np.array(message.decode("utf-8").split(",")).astype(np.int))
-            self.addDic[address[0]]=i
-            self.myIPs.append(address)
-            print('[INFO] client '+str(len(self.addDic))+' connected at '+str(address[0]))
-            ret,newCamMatrix=self.myIntrinsics(self.cameraMat[i],self.imageSize[i][0],self.imageSize[i][1],self.imageSize[i][2])
-            if ret: self.cameraMat[i]=np.copy(newCamMatrix)
-            else: break
+            # CHECK IF IS IN IP LIST
+            if not len(np.where(self.ipList==address[0])[0]):
+                print('[ERROR] IP '+address[0]+' not in the list')
+                exit()
+            # GET IMAGE SIZE
+            idx = np.where(self.ipList==address[0])[0][0]
+            if idx in addedCams: continue
+            self.imageSize[idx] = np.array(message.decode("utf-8").split(",")).astype(np.int)
+            print('[INFO] camera '+str(idx)+' connected at '+str(address[0]))
+            # REDO INTRINSICS
+            ret,newCamMatrix=self.myIntrinsics(self.cameraMat[idx],self.imageSize[idx][0],self.imageSize[idx][1],self.imageSize[idx][2])
+            if ret: self.cameraMat[idx]=np.copy(newCamMatrix)
+            else: exit()
+            k+=1
+            addedCams.append(idx)
+            ports.append(address)
         # SEND TRIGGER 
         print('[INFO] all clients connected')
         self.triggerTime += time.time()
-        for i in range(self.numberCameras): self.server_socket.sendto((str(self.triggerTime)+' '+str(self.recTime)).encode(),tuple(self.myIPs[i]))
+        for i in range(self.numberCameras): self.server_socket.sendto((str(self.triggerTime)+' '+str(self.recTime)).encode(),tuple(ports[i]))
         print('[INFO] trigger sent')
 
     # NEW INTRINSICS
@@ -77,7 +105,6 @@ class myServer(object):
             else:
                 print('[ERROR] conversion for intrinsics matrix not known')
                 return False,camIntris
-            print('[INFO] intrisics known')
             return True,camIntris
         else:
             print('[ERROR] out of proportion of the camera mode')
@@ -93,6 +120,7 @@ class myServer(object):
         swap,certainty = np.zeros(self.numberCameras,dtype=np.uint16),np.zeros(self.numberCameras,dtype=np.bool8)
         lastImgNumber,tol = np.zeros(self.numberCameras,dtype=np.int32),0.25
         intervals,timeIntervals,dfSave,dfOrig = [],[],[],[]
+        rotation,translation,scale,FMatrix = [np.identity(3)],[[[0., 0., 0.]]],[],[]
         for i in range(self.numberCameras): 
             intervals.append([])
             timeIntervals.append([])
@@ -104,7 +132,7 @@ class myServer(object):
                 bytesPair = self.server_socket.recvfrom(self.bufferSize)
                 message = np.frombuffer(bytesPair[0],dtype=np.float64)
                 address,sizeMsg = bytesPair[1],len(message)
-                idx = self.addDic[address[0]]
+                idx = np.where(self.ipList==address[0])[0][0]
                 if not (sizeMsg-1): capture[idx] = 0
                 # if valid message
                 if capture[idx]: # check if message is valid
@@ -121,8 +149,7 @@ class myServer(object):
                         # store message parameters
                         a,b,time,imgNumber = message[-4],message[-3],message[-2],int(message[-1]) 
                         # undistort points
-                        if address[0] == self.firstIP: undCoord = processCentroids_calib(coord,a,b,self.cameraMat[0],distCoef_cam1)
-                        else: undCoord = processCentroids_calib(coord,a,b,self.cameraMat[1],distCoef_cam2)
+                        undCoord = processCentroids(coord,a,b,self.cameraMat[idx],distCoef[idx])
                         # check if there is an obstruction between the blobs
                         '''for [A,B,C] in undCoord.reshape([-1, 3, 2]):
                             if np.linalg.norm(A-B)<(size[0]+size[1])/2 or np.linalg.norm(A-C)<(size[0]+size[2])/2 or np.linalg.norm(B-C)<(size[1]+size[2])/2: 
@@ -146,7 +173,7 @@ class myServer(object):
                                 if certainty[idx]:
                                     beg,end = intervals[idx][-1],counter[idx]-1
                                     timeIntervals[idx].append([dfOrig[idx][beg,6],dfOrig[idx][end,6]])
-                                    print('[WARNING] camera #'+str(idx)+' valid from '+str(round(dfOrig[idx][beg,6]/1e6,2))+'s to '+str(round(dfOrig[idx][end][6]/1e6,2))+'s')
+                                    if self.verbose: print('[WARNING] camera #'+str(idx)+' valid from '+str(round(dfOrig[idx][beg,6]/1e6,2))+'s to '+str(round(dfOrig[idx][end][6]/1e6,2))+'s')
                                 prev,certainty[idx] = [],False
                                 intervals[idx].append(counter[idx])
                             else: 
@@ -185,42 +212,81 @@ class myServer(object):
                     beg,end = intervals[idx][-1],counter[idx]-1
                     timeIntervals[idx].append([dfOrig[idx][beg,6],dfOrig[idx][end,6]])    
                     print('[INFO] camera #'+str(idx)+' valid from '+str(round(dfOrig[idx][beg,6]/1e6,2))+'s to '+str(round(dfOrig[idx][end,6]/1e6,2))+'s')
-            # compute valid time intersection for interpolation
-            intersections = [[max(first[0], second[0]), min(first[1], second[1])]  
-                                for first in timeIntervals[0] for second in timeIntervals[1]  
-                                if max(first[0], second[0]) <= min(first[1], second[1])]
-            # interpolate at intersections
-            dfInterp = np.zeros((self.nImages,self.numberCameras*6+1))
-            dfInterp[:,-1] = np.linspace(0,self.recTime,self.nImages)
-            for [beg,end] in intersections:
-                for idx in range(self.numberCameras):
-                    validIdx = [i for i in range(0,len(dfOrig[idx])) if beg<=dfOrig[idx][i,-1]<=end]
-                    coord,time = dfOrig[idx][validIdx,0:6],dfOrig[idx][validIdx,6]/1e6
-                    if time.shape[0]<=2: continue
-                    lowBound,highBound = math.ceil(time[0]/self.step),math.floor(time[-1]/self.step)
-                    print('[INFO] interpolated #'+str(idx+1)+' from '+str(round(lowBound*self.step,2))+'s to '+str(round(highBound*self.step,2))+'s')
-                    tNew = np.linspace(lowBound,highBound,int((highBound-lowBound))+1,dtype=np.uint16)
-                    ff = CubicSpline(time,coord,axis=0)
-                    dfInterp[tNew,int(idx*6):int(idx*6+6)] = ff(tNew*self.step)
-            # save centroids
-            dfInterp = np.delete(dfInterp,np.unique([i for i in range(0,dfInterp.shape[0]) for idx in range(self.numberCameras) if not np.any(dfInterp[i][idx*6:idx*6+6])]),axis=0)
-            centroids1,centroids2 = dfInterp[:,0:6].reshape(-1,2),dfInterp[:,6:12].reshape(-1,2)
             # print results
             print('[RESULTS] server results are')
-            for i in range(self.numberCameras): print('  >> camera '+str(i)+': '+str(len(dfOrig[i]))+' captured valid images images, address '+str(self.myIPs[i][0])+', missed '+str(int(missed[i]))+' images')
-            # save results
-            if self.save: 
-                np.savetxt('camCalib.csv', np.array(dfSave), delimiter=',')
-                #np.savetxt('cam_interp.csv', np.array(dfInterp), delimiter=',')
-                #np.savetxt('cam1_original.csv', np.array(dfOrig[0]), delimiter=',')
-                #np.savetxt('cam2_original.csv', np.array(dfOrig[1]), delimiter=',')
-            # get fundamental and essential matrices
-            print('[INFO] Computing fundamental and essential matrix')
-            try: 
-                F,_ = estimateFundMatrix_8norm(np.array(centroids1),np.array(centroids2),verbose=False)
-                E = np.matmul(self.cameraMat[1].T, np.matmul(F, self.cameraMat[0]))
-            # decompose to rotation and translation between cameras
-                R, t = decomposeEssentialMat(E, self.cameraMat[0], self.cameraMat[1], np.array(centroids1), np.array(centroids2))
+            for i in range(self.numberCameras): print('  >> camera '+str(i)+': '+str(len(dfOrig[i]))+' captured valid images images, address '+str(self.ipList[i])+', missed '+str(int(missed[i]))+' images')
+            if self.save: np.savetxt('camCalib.csv', np.array(dfSave), delimiter=',')
+            # get pose between each pair
+            for j in range(self.numberCameras-1):
+                # compute valid time intersection for interpolation
+                intersections = [[max(first[0], second[0]), min(first[1], second[1])]  
+                                    for first in timeIntervals[j] for second in timeIntervals[j+1]  
+                                    if max(first[0], second[0]) <= min(first[1], second[1])]
+                # interpolate at intersections
+                dfInterp = np.zeros((self.nImages,2*6+1))
+                dfInterp[:,-1] = np.linspace(0,self.recTime,self.nImages)
+                for [beg,end] in intersections:
+                    for idx in range(j,j+2):
+                        validIdx = [i for i in range(0,len(dfOrig[idx])) if beg<=dfOrig[idx][i,-1]<=end]
+                        coord,time = dfOrig[idx][validIdx,0:6],dfOrig[idx][validIdx,6]/1e6
+                        if time.shape[0]<=2: continue
+                        lowBound,highBound = math.ceil(time[0]/self.step),math.floor(time[-1]/self.step)
+                        if self.verbose: print('[INFO] interpolated #'+str(idx)+' from '+str(round(lowBound*self.step,2))+'s to '+str(round(highBound*self.step,2))+'s')
+                        tNew = np.linspace(lowBound,highBound,int((highBound-lowBound))+1,dtype=np.uint16)
+                        ff = CubicSpline(time,coord,axis=0)
+                        dfInterp[tNew,int((idx-j)*6):int((idx-j)*6+6)] = ff(tNew*self.step)
+                # get data
+                dfInterp = np.delete(dfInterp,np.unique([i for i in range(0,dfInterp.shape[0]) for idx in range(2) if not np.any(dfInterp[i][idx*6:idx*6+6])]),axis=0)
+                if dfInterp.shape[0] < 10: 
+                    print('[ERROR] no valid image intersection for cameras '+str(j)+' and '+str(j+1))
+                    return
+                centroids1,centroids2 = dfInterp[:,j*6:j*6+6].reshape(-1,2),dfInterp[:,(j+1)*6:(j+1)*6+6].reshape(-1,2)
+                # get fundamental and essential matrices 
+                print('[INFO] Computing fundamental and essential matrix between cameras '+str(j)+'-'+str(j+1))
+                try: 
+                    F,_ = estimateFundMatrix_8norm(np.array(centroids1),np.array(centroids2),verbose=False)
+                    E = np.matmul(self.cameraMat[j+1].T, np.matmul(F, self.cameraMat[j]))
+                # decompose to rotation and translation between cameras
+                    R, t = decomposeEssentialMat(E, self.cameraMat[j], self.cameraMat[j+1], np.array(centroids1), np.array(centroids2))
+                    if np.any(np.isnan(R)): 
+                        print('[ERROR] no valid rotation matrix')
+                        return
+                    else:
+                        if self.verbose:
+                            print("\nRot. Mat.\n", R.round(4))
+                            print("\nTrans. Mat.\n", t.round(4))
+                except: 
+                    print('[ERROR] no valid rotation matrix')
+                    return
+                P1,P2 = np.hstack((self.cameraMat[0], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[1], np.hstack((R, t.T)))
+                projPt1,projPt2 = myProjectionPoints(np.array(centroids1)),myProjectionPoints(np.array(centroids2))
+                points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
+                points3d = (points4d[:3, :]/points4d[3, :]).T
+                if points3d[0, 2] < 0: points3d = -points3d
+                tot,L_real_AC,L_real_AB,L_real_BC,k,false_idx = 0,15.7,5.5,10.2,0,[]
+                # compute sdt deviation and plot beautiful stuff
+                for [A, B, C] in points3d.reshape([-1, 3, 3]):
+                    L_rec_AC,L_rec_BC,L_rec_AB = np.linalg.norm(A-C),np.linalg.norm(B-C),np.linalg.norm(A-B)
+                    tot = tot + L_real_AC/L_rec_AC + L_real_BC/L_rec_BC + L_real_AB/L_rec_AB
+                    k+=3
+                lamb = tot/k
+                points3d_new,i,k= points3d*lamb,0,0
+                for [A, B, C] in points3d_new.reshape([-1, 3, 3]):
+                    L_reconst = np.sqrt(np.sum((A-C)**2, axis=0))
+                    valid = abs(L_real_AC-L_reconst)/L_real_AC < 0.01
+                    if not valid: 
+                        i+=1
+                        false_idx.extend((k,k+1,k+2))
+                    k+=3
+                print("[INFO] Images distant more than 1% from the real value = " + str(i)+'/'+str(int(points3d.shape[0]/3)))
+                # refining estimation
+                print("[INFO] Refining fundamental matrix estimation")
+                centroids1,centroids2=np.delete(np.copy(centroids1),false_idx,axis=0),np.delete(np.copy(centroids2),false_idx,axis=0)
+                # get fundamental and essential matrices
+                F,_ = estimateFundMatrix_8norm(np.copy(centroids1),np.copy(centroids2))
+                E = np.matmul(self.cameraMat[j+1].T, np.matmul(F, self.cameraMat[j]))
+                # decompose to rotation and translation between cameras
+                R, t = decomposeEssentialMat(E, self.cameraMat[j], self.cameraMat[j+1], np.copy(centroids1), np.copy(centroids2))
                 if np.any(np.isnan(R)): 
                     print('[ERROR] no valid rotation matrix')
                     return
@@ -228,120 +294,54 @@ class myServer(object):
                     if self.verbose:
                         print("\nRot. Mat.\n", R.round(4))
                         print("\nTrans. Mat.\n", t.round(4))
-            except: 
-                print('[ERROR] no valid rotation matrix')
-                return
-            P1,P2 = np.hstack((self.cameraMat[0], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[1], np.hstack((R, t.T)))
-            projPt1,projPt2 = myProjectionPoints(np.array(centroids1)),myProjectionPoints(np.array(centroids2))
-            points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
-            points3d = (points4d[:3, :]/points4d[3, :]).T
-            if points3d[0, 2] < 0: points3d = -points3d
-            tot,L_real_AC,L_real_AB,L_real_BC,k,false_idx = 0,15.7,5.5,10.2,0,[]
-            # compute sdt deviation and plot beautiful stuff
-            for [A, B, C] in points3d.reshape([-1, 3, 3]):
-                L_rec_AC,L_rec_BC,L_rec_AB = np.linalg.norm(A-C),np.linalg.norm(B-C),np.linalg.norm(A-B)
-                tot = tot + L_real_AC/L_rec_AC + L_real_BC/L_rec_BC + L_real_AB/L_rec_AB
-                k+=3
-            lamb = tot/k
-            points3d_new,i,k= points3d*lamb,0,0
-            for [A, B, C] in points3d_new.reshape([-1, 3, 3]):
-                L_reconst = np.sqrt(np.sum((A-C)**2, axis=0))
-                valid = abs(L_real_AC-L_reconst)/L_real_AC < 0.01
-                if not valid: 
-                    i = i + 1
-                    false_idx.extend((k,k+1,k+2))
-                k+=3
-            print("[INFO] Images distant more than 1% from the real value = " + str(i)+'/'+str(int(points3d.shape[0]/3)))
-            # refining estimation
-            print("[INFO] Refining fundamental matrix estimation")
-            centroids1,centroids2=np.delete(np.copy(centroids1),false_idx,axis=0),np.delete(np.copy(centroids2),false_idx,axis=0)
-            # get fundamental and essential matrices
-            F,_ = estimateFundMatrix_8norm(np.copy(centroids1),np.copy(centroids2))
-            E = np.matmul(self.cameraMat[1].T, np.matmul(F, self.cameraMat[0]))
-            # decompose to rotation and translation between cameras
-            R, t = decomposeEssentialMat(E, self.cameraMat[0], self.cameraMat[1], np.copy(centroids1), np.copy(centroids2))
-            if np.any(np.isnan(R)): 
-                print('[ERROR] no valid rotation matrix')
-                return
-            else:
-                if self.verbose:
-                    print("\nRot. Mat.\n", R.round(4))
-                    print("\nTrans. Mat.\n", t.round(4))
-                np.savetxt('R.csv', np.array(R), delimiter=',')
-                np.savetxt('t.csv', np.array(t), delimiter=',')
-                np.savetxt('lamb.csv', np.array([lamb]), delimiter=',')
-                np.savetxt('F.csv', np.array(F), delimiter=',')
-            P1,P2 = np.hstack((self.cameraMat[0], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[1], np.hstack((R, t.T)))
-            projPt1,projPt2 = myProjectionPoints(np.copy(centroids1)),myProjectionPoints(np.copy(centroids2))
-            points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
-            points3d = (points4d[:3, :]/points4d[3, :]).T
-            if points3d[0, 2] < 0: points3d = -points3d
-            tot,L_AC_vec,L_BC_vec,L_AB_vec,k = 0,[],[],[],0
-            # compute sdt deviation and plot beautiful stuff
-            for [A, B, C] in points3d.reshape([-1, 3, 3]):
-                L_rec_AC,L_rec_BC,L_rec_AB = np.linalg.norm(A-C),np.linalg.norm(B-C),np.linalg.norm(A-B)
-                tot = tot + L_real_AC/L_rec_AC + L_real_BC/L_rec_BC + L_real_AB/L_rec_AB
-                k+=3
-                L_AC_vec.append(L_rec_AC)
-                L_BC_vec.append(L_rec_BC)
-                L_AB_vec.append(L_rec_AB)
-            lamb = tot/k
-            print('[INFO] Scale between real world and triang. point cloud is: ', lamb.round(2))
-            print('[INFO] L_AC >> mean = ' + str((np.mean(L_AC_vec)*lamb).round(4)) +
-                "cm, std. dev = " + str((np.std(L_AC_vec)*lamb).round(4)) +
-                "cm, rms = " + str((np.sqrt(np.mean(np.square(np.array(L_AC_vec)*lamb-L_real_AC)))).round(4)) + "cm")
-            print('[INFO] L_AB >> mean = ' + str((np.mean(L_AB_vec)*lamb).round(4)) +
-                "cm, std. dev = " + str((np.std(L_AB_vec)*lamb).round(4)) +
-                "cm, rms = " + str((np.sqrt(np.mean(np.square(np.array(L_AB_vec)*lamb-L_real_AB)))).round(4)) + "cm")
-            print('[INFO] L_BC >> mean = ' + str((np.mean(L_BC_vec)*lamb).round(4)) +
-                "cm, std. dev = " + str((np.std(L_BC_vec)*lamb).round(4)) +
-                "cm, rms = " + str((np.sqrt(np.mean(np.square(np.array(L_BC_vec)*lamb-L_real_BC)))).round(4)) + "cm")
-            fig = plt.figure(figsize=(10, 6), dpi=100)
-            L_AC_vec_plot,L_BC_vec_plot,L_AB_vec_plot = np.array(L_AC_vec)*lamb - L_real_AC,np.array(L_BC_vec)*lamb - L_real_BC,np.array(L_AB_vec)*lamb - L_real_AB
-            plt.plot(L_AC_vec_plot, '-o', label="std_AC")
-            plt.plot(L_BC_vec_plot, '-o', label="std_BC")
-            plt.plot(L_AB_vec_plot, '-o', label="std_AB")
-            plt.axhline(y=0.0, color='r', linestyle='-')
-            plt.grid()
-            #plt.axvline(x=853, c='r', linestyle='--', label="image 960")
-            plt.xlabel("Image number")
-            plt.ylabel("Deviation to mean value (cm)")
-            plt.legend()
-            ax = fig.axes
-            ax[0].minorticks_on()
-            plt.grid(which='both')
-            plt.xlim(0,len(L_AC_vec)-1)
-            plt.draw()
-            plt.show()
-            # epipolar lines
-            img1,img2,k = np.ones((540,960))*255,np.ones((540,960))*255,100
-            pts1,pts2 = np.int32(centroids1[k:k+3].reshape(-1,2)),np.int32(centroids2[k:k+3].reshape(-1,2))
-            lines1 = computeCorrespondEpilines(pts2.reshape(-1,1,2), 2,F)
-            lines1 = lines1.reshape(-1,3)
-            img5,_ = self.drawlines(img1,img2,lines1,pts1,pts2)
-            lines2 = computeCorrespondEpilines(pts1.reshape(-1,1,2), 1,F)
-            lines2 = lines2.reshape(-1,3)
-            img3,_ = self.drawlines(img2,img1,lines2,pts2,pts1)
-            plt.figure(figsize=(20, 16))
-            plt.subplot(121),plt.imshow(img5)
-            plt.subplot(122),plt.imshow(img3)
-            plt.show()
-    
-    def drawlines(self,img1,img2,lines,pts1,pts2):
-        r,c = img1.shape
-        img1 = cvtColor(img1.astype('float32'),COLOR_GRAY2BGR)
-        img2 = cvtColor(img2.astype('float32'),COLOR_GRAY2BGR)
-        listColors = [(0,0,255),(0,255,0),(255,0,0)]
-        i = 0
-        for r,pt1,pt2 in zip(lines,pts1,pts2):
-            color = listColors[i]
-            x0,y0 = map(int, [0, -r[2]/r[1] ])
-            x1,y1 = map(int, [c, -(r[2]+r[0]*c)/r[1] ])
-            img1 = line(img1, (x0,y0), (x1,y1), color,1)
-            img1 = circle(img1,tuple(pt1),5,color,-1)
-            img2 = circle(img2,tuple(pt2),5,color,-1)
-        i+=1
-        return img1,img2
+                P1,P2 = np.hstack((self.cameraMat[0], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[1], np.hstack((R, t.T)))
+                projPt1,projPt2 = myProjectionPoints(np.copy(centroids1)),myProjectionPoints(np.copy(centroids2))
+                points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
+                points3d = (points4d[:3, :]/points4d[3, :]).T
+                if points3d[0, 2] < 0: points3d = -points3d
+                tot,L_AC_vec,L_BC_vec,L_AB_vec,k = 0,[],[],[],0
+                # compute sdt deviation and plot beautiful stuff
+                for [A, B, C] in points3d.reshape([-1, 3, 3]):
+                    L_rec_AC,L_rec_BC,L_rec_AB = np.linalg.norm(A-C),np.linalg.norm(B-C),np.linalg.norm(A-B)
+                    tot = tot + L_real_AC/L_rec_AC + L_real_BC/L_rec_BC + L_real_AB/L_rec_AB
+                    k+=3
+                    L_AC_vec.append(L_rec_AC)
+                    L_BC_vec.append(L_rec_BC)
+                    L_AB_vec.append(L_rec_AB)
+                lamb = tot/k
+                print('[INFO] Scale between real world and triang. point cloud is: ', lamb.round(2))
+                print('[INFO] L_AC >> mean = ' + str((np.mean(L_AC_vec)*lamb).round(4)) +
+                    "cm, std. dev = " + str((np.std(L_AC_vec)*lamb).round(4)) +
+                    "cm, rms = " + str((np.sqrt(np.mean(np.square(np.array(L_AC_vec)*lamb-L_real_AC)))).round(4)) + "cm")
+                print('[INFO] L_AB >> mean = ' + str((np.mean(L_AB_vec)*lamb).round(4)) +
+                    "cm, std. dev = " + str((np.std(L_AB_vec)*lamb).round(4)) +
+                    "cm, rms = " + str((np.sqrt(np.mean(np.square(np.array(L_AB_vec)*lamb-L_real_AB)))).round(4)) + "cm")
+                print('[INFO] L_BC >> mean = ' + str((np.mean(L_BC_vec)*lamb).round(4)) +
+                    "cm, std. dev = " + str((np.std(L_BC_vec)*lamb).round(4)) +
+                    "cm, rms = " + str((np.sqrt(np.mean(np.square(np.array(L_BC_vec)*lamb-L_real_BC)))).round(4)) + "cm")
+                translation.append(t)
+                rotation.append(R)
+                scale.append([lamb])
+                FMatrix.append(F)
+                # epipolar lines
+                img1,img2 = np.ones(np.flip(self.imageSize[j][0:2]))*255,np.ones(np.flip(self.imageSize[j+1][0:2]))*255
+                pts1,pts2 = np.int32(centroids1[0:3].reshape(-1,2)),np.int32(centroids2[0:3].reshape(-1,2))
+                lines1 = computeCorrespondEpilines(pts2.reshape(-1,1,2), 2,F)
+                lines1 = lines1.reshape(-1,3)
+                img5,_ = drawlines(img1,img2,lines1,pts1,pts2)
+                lines2 = computeCorrespondEpilines(pts1.reshape(-1,1,2), 1,F)
+                lines2 = lines2.reshape(-1,3)
+                img3,_ = drawlines(img2,img1,lines2,pts2,pts1)
+                plt.figure(figsize=(20, 16))
+                plt.subplot(121),plt.imshow(img5)
+                plt.subplot(122),plt.imshow(img3)
+                plt.show()
+            
+            np.savetxt('R.csv', np.ravel(rotation), delimiter=',')
+            np.savetxt('t.csv', np.ravel(translation), delimiter=',')
+            np.savetxt('lamb.csv', np.ravel(scale), delimiter=',')
+            np.savetxt('F.csv', np.ravel(FMatrix), delimiter=',')
+            
  
             
 # parser for command line
@@ -355,7 +355,7 @@ parser.add_argument('--verbose',help='show points capture after end of recording
 parser.add_argument('--help', action='help', default=argparse.SUPPRESS, help='show this help message and exit.')
 parser.add_argument('-out', help='write the rotation matrix and translation vector(default: off)',default=False, action='store_true')
 parser.add_argument('-save',help='save received packages to CSV (default: off)',default=False, action='store_true')
-parser.add_argument('-ip',type=str,help='IP from first camera (default: 192.168.0.102)',default='192.168.0.102')
+parser.add_argument('-ip',type=str,help='List of IPs of each camera, in order',default='')
 args = parser.parse_args()
 
 myServer_ = myServer(args.n,args.trig,args.rec,args.fps,args.verbose,args.out,args.save,args.ip)
