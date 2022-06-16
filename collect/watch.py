@@ -82,7 +82,7 @@ class OnMyWatch:
         self.observer.start()
         try:
             while True:
-                time.sleep(120)
+                time.sleep(300)
                 self.observer.stop()
                 UDPSocket.sendto(np.array([0.0]).tobytes(),("192.168.0.104", 8888))
                 print("Observer Stopped 1")
