@@ -116,7 +116,7 @@ class myServer(object):
         print('[INFO] waiting capture')
         capture = np.ones(self.numberCameras,dtype=np.bool)
         counter,lastTime = np.zeros(self.numberCameras,dtype=np.uint16),np.zeros(self.numberCameras,dtype=np.uint32)
-        missed,invalid = np.zeros(2,dtype=np.uint32),np.zeros(2,dtype=np.uint32)
+        missed,invalid = np.zeros(self.numberCameras,dtype=np.uint32),np.zeros(self.numberCameras,dtype=np.uint32)
         swap,certainty = np.zeros(self.numberCameras,dtype=np.uint16),np.zeros(self.numberCameras,dtype=np.bool8)
         lastImgNumber,tol = np.zeros(self.numberCameras,dtype=np.int32),0.25
         intervals,timeIntervals,dfSave,dfOrig = [],[],[],[]
@@ -161,7 +161,7 @@ class myServer(object):
                         # if ts if not read corectly, discard
                         if counter[idx]:
                             if abs(time-lastTime[idx])>1e9: 
-                                if self.verbose: print('[WARNING] time missmatch')
+                                if self.verbose: print('[WARNING-CAM+'+str(idx)+'] time missmatch')
                                 missed[idx]+=1
                                 invalid[idx]+=1
                                 continue
@@ -173,7 +173,7 @@ class myServer(object):
                                 if certainty[idx]:
                                     beg,end = intervals[idx][-1],counter[idx]-1
                                     timeIntervals[idx].append([dfOrig[idx][beg,6],dfOrig[idx][end,6]])
-                                    if self.verbose: print('[WARNING] camera #'+str(idx)+' valid from '+str(round(dfOrig[idx][beg,6]/1e6,2))+'s to '+str(round(dfOrig[idx][end][6]/1e6,2))+'s')
+                                    if self.verbose: print('[WARNING-CAM+'+str(idx)+'] valid from '+str(round(dfOrig[idx][beg,6]/1e6,2))+'s to '+str(round(dfOrig[idx][end][6]/1e6,2))+'s')
                                 prev,certainty[idx] = [],False
                                 intervals[idx].append(counter[idx])
                             else: 
@@ -182,7 +182,7 @@ class myServer(object):
                             undCoord, _ = orderCenterCoord(undCoord,prev)
                             undCoord = np.array(undCoord)
                         else: 
-                            if self.verbose: print('[WARNING] not collinear or equal centroids')
+                            if self.verbose: print('[WARNING-CAM+'+str(idx)+'] not collinear or equal centroids')
                             missed[idx]+=1
                             invalid[idx]+=1
                             continue
