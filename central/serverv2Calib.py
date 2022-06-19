@@ -240,7 +240,7 @@ class myServer(object):
                 if dfInterp.shape[0] < 10: 
                     print('[ERROR] no valid image intersection for cameras '+str(j)+' and '+str(j+1))
                     return
-                centroids1,centroids2 = dfInterp[:,j*6:j*6+6].reshape(-1,2),dfInterp[:,(j+1)*6:(j+1)*6+6].reshape(-1,2)
+                centroids1,centroids2 = dfInterp[:,0:6].reshape(-1,2),dfInterp[:,6:12].reshape(-1,2)
                 # get fundamental and essential matrices 
                 print('[INFO] Computing fundamental and essential matrix between cameras '+str(j)+'-'+str(j+1))
                 try: 
@@ -258,7 +258,7 @@ class myServer(object):
                 except: 
                     print('[ERROR] no valid rotation matrix')
                     return
-                P1,P2 = np.hstack((self.cameraMat[0], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[1], np.hstack((R, t.T)))
+                P1,P2 = np.hstack((self.cameraMat[j], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[j+1], np.hstack((R, t.T)))
                 projPt1,projPt2 = myProjectionPoints(np.array(centroids1)),myProjectionPoints(np.array(centroids2))
                 points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
                 points3d = (points4d[:3, :]/points4d[3, :]).T
@@ -294,7 +294,7 @@ class myServer(object):
                     if self.verbose:
                         print("\nRot. Mat.\n", R.round(4))
                         print("\nTrans. Mat.\n", t.round(4))
-                P1,P2 = np.hstack((self.cameraMat[0], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[1], np.hstack((R, t.T)))
+                P1,P2 = np.hstack((self.cameraMat[j], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[j+1], np.hstack((R, t.T)))
                 projPt1,projPt2 = myProjectionPoints(np.copy(centroids1)),myProjectionPoints(np.copy(centroids2))
                 points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
                 points3d = (points4d[:3, :]/points4d[3, :]).T
