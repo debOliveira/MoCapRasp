@@ -3,9 +3,9 @@ import warnings
 warnings.filterwarnings("ignore")
 import socket,time,math,argparse
 import numpy as np
-from functions import processCentroids_calib,cameraMatrix_cam1,cameraMatrix_cam2,distCoef_cam1,distCoef_cam2
+from constants import cameraMat,distCoef
 from cv2 import circle,destroyAllWindows,triangulatePoints,cvtColor,line,COLOR_GRAY2RGB,computeCorrespondEpilines,FONT_HERSHEY_SIMPLEX,putText
-from myLib import orderCenterCoord,estimateFundMatrix_8norm,decomposeEssentialMat,myProjectionPoints,isCollinear,isEqual,getSignal
+from myLib import myProjectionPoints,isEqual,processCentroids
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.interpolate import CubicSpline
@@ -74,44 +74,56 @@ def drawlines(img1,img2,lines,pts1,pts2):
     return img1,img2
 
 class myServer(object):
-    def __init__(self,numberCameras,triggerTime,recTime,FPS,verbose,output,save,firstIP):
+    def __init__(self,numberCameras,triggerTime,recTime,FPS,verbose,output,save,ipList):
         ##########################################
-        # PLEASE CHANGE JUST THE VARIABLES BELOW #
+        # PLEASE DONT CHANGE THE VARIABLES BELOW #
         ##########################################
-        self.numberCameras,self.triggerTime,self.recTime,self.step,self.out,self.save,self.verbose,self.firstIP = numberCameras,triggerTime,recTime,1/FPS,output,save,verbose,firstIP
-        self.cameraMat = np.array([cameraMatrix_cam1,cameraMatrix_cam2])
+        self.numberCameras,self.triggerTime,self.recTime,self.step,self.out,self.save,self.verbose,self.ipList = numberCameras,triggerTime,recTime,1/FPS,output,save,verbose,np.array(ipList.split(','))
+        # check number of ips
+        if self.ipList.shape[0]!=self.numberCameras:
+            print('[ERROR] Number of cameras do not match the number of IPs given')
+            exit()
+        self.cameraMat,self.distCoef = np.copy(cameraMat),np.copy(distCoef)
         # do not change below this line, socket variables
         self.nImages,self.imageSize = int(self.recTime/self.step),[]
+        for i in range(self.numberCameras): self.imageSize.append([])
         print('[INFO] creating server')
         self.bufferSize,self.server_socket = 1024,socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
         self.server_socket.bind(('0.0.0.0',8888))
         # internal variables
-        self.addDic,self.myIPs,self.P= {},[],[]
-        for i in range(self.numberCameras):  self.P.append([]) 
-        self.R,self.t = np.genfromtxt('R.csv', delimiter=','),np.genfromtxt('t.csv', delimiter=',').reshape(-1,3)
-        self.lamb,self.F = np.genfromtxt('lamb.csv',delimiter=','),np.genfromtxt('F.csv', delimiter=',')
-        self.R_plane,self.t_plane = np.genfromtxt('R_plane.csv', delimiter=','),np.genfromtxt('t_plane.csv', delimiter=',')
+        #self.P= {},[]
+        #for i in range(self.numberCameras):  self.P.append([]) 
+        #self.R,self.t = np.genfromtxt('R.csv', delimiter=','),np.genfromtxt('t.csv', delimiter=',').reshape(-1,3)
+        #self.lamb,self.F = np.genfromtxt('lamb.csv',delimiter=','),np.genfromtxt('F.csv', delimiter=',')
+        #self.R_plane,self.t_plane = np.genfromtxt('R_plane.csv', delimiter=','),np.genfromtxt('t_plane.csv', delimiter=',')
         
     # CONNECT WITH CLIENTS
     def connect(self):
         print("[INFO] server running, waiting for clients")
-        for i in range(self.numberCameras):
+        addedCams,ports,k=[],[],0
+        while k!=self.numberCameras:
             # COLLECT ADDRESSES
             message,address = self.server_socket.recvfrom(self.bufferSize)
-            self.imageSize.append(np.array(message.decode("utf-8").split(",")).astype(np.int))
-            self.addDic[address[0]]=i
-            self.myIPs.append(address)
-            print('[INFO] client '+str(len(self.addDic))+' connected at '+str(address[0]))
-            ret,newCamMatrix=self.myIntrinsics(self.cameraMat[i],self.imageSize[i][0],self.imageSize[i][1],self.imageSize[i][2])
-            if ret: self.cameraMat[i]=np.copy(newCamMatrix)
-            else: break
-        # set projection matrices
-        print('[INFO] projection matrices set')
-        self.P[0],self.P[1] = np.hstack((self.cameraMat[0],[[0.],[0.],[0.]])),np.matmul(self.cameraMat[1], np.hstack((self.R,self.t.T)))
+            # CHECK IF IS IN IP LIST
+            if not len(np.where(self.ipList==address[0])[0]):
+                print('[ERROR] IP '+address[0]+' not in the list')
+                exit()
+            # GET IMAGE SIZE
+            idx = np.where(self.ipList==address[0])[0][0]
+            if idx in addedCams: continue
+            self.imageSize[idx] = np.array(message.decode("utf-8").split(",")).astype(np.int)
+            print('[INFO] camera '+str(idx)+' connected at '+str(address[0]))
+            # REDO INTRINSICS
+            ret,newCamMatrix=self.myIntrinsics(self.cameraMat[idx],self.imageSize[idx][0],self.imageSize[idx][1],self.imageSize[idx][2])
+            if ret: self.cameraMat[idx]=np.copy(newCamMatrix)
+            else: exit()
+            k+=1
+            addedCams.append(idx)
+            ports.append(address)
         # SEND TRIGGER 
         print('[INFO] all clients connected')
         self.triggerTime += time.time()
-        for i in range(self.numberCameras): self.server_socket.sendto((str(self.triggerTime)+' '+str(self.recTime)).encode(),tuple(self.myIPs[i]))
+        for i in range(self.numberCameras): self.server_socket.sendto((str(self.triggerTime)+' '+str(self.recTime)).encode(),tuple(ports[i]))
         print('[INFO] trigger sent')
 
     # NEW INTRINSICS
@@ -145,12 +157,11 @@ class myServer(object):
                 camIntris[0][0],camIntris[0][2]=ratio*camIntris[0][0],ratio*camIntris[0][2]
                 camIntris[1][1],camIntris[1][2]=ratio*camIntris[1][1],ratio*camIntris[1][2]
             else:
-                print('conversion for intrinsics matrix not known')
+                print('[ERROR] conversion for intrinsics matrix not known')
                 return False,camIntris
-            print('[INFO] intrisics known')
             return True,camIntris
         else:
-            print('out of proportion of the camera mode')
+            print('[ERROR] out of proportion of the camera mode')
             return False,camIntris
 
     def getOrderPerEpiline(self,coord1,coord2,nMarkers,verbose = 0):
@@ -219,8 +230,8 @@ class myServer(object):
         # internal variables
         print('[INFO] waiting capture')
         capture = np.ones(self.numberCameras,dtype=np.bool)
-        counter,lastTime,lastImgNumber = np.zeros(2,dtype=np.int32),np.zeros(2,dtype=np.int32),np.zeros(2,dtype=np.int32)
-        missed,invalid,needsOrder = np.zeros(2,dtype=np.int32),np.zeros(2,dtype=np.int32),True
+        counter,lastTime,lastImgNumber = np.zeros(self.numberCameras,dtype=np.int32),np.zeros(self.numberCameras,dtype=np.int32),np.zeros(self.numberCameras,dtype=np.int32)
+        missed,invalid,needsOrder = np.zeros(self.numberCameras,dtype=np.int32),np.zeros(self.numberCameras,dtype=np.int32),True
         dfSave,dfOrig,points3d,intervals,lastTnew = [],[],[],[],[]
         nPrevious,warmUp = 3,10
         for i in range(self.numberCameras): 
@@ -236,7 +247,7 @@ class myServer(object):
                 bytesPair = self.server_socket.recvfrom(self.bufferSize)
                 message = np.frombuffer(bytesPair[0],dtype=np.float64)
                 address,sizeMsg = bytesPair[1],len(message)
-                idx = self.addDic[address[0]]
+                idx = np.where(self.ipList==address[0])[0][0]
                 if not (sizeMsg-1): capture[idx] = 0
                 # if valid message
                 if capture[idx]: # check if message is valid
@@ -253,10 +264,9 @@ class myServer(object):
                         '''# store message parameters
                         a,b,time,imgNumber = message[-4],message[-3],message[-2],int(message[-1]) 
                         # undistort points
-                        if address[0] == self.firstIP: undCoord = processCentroids_calib(coord,a,b,self.cameraMat[0],distCoef_cam1)
-                        else: undCoord = processCentroids_calib(coord,a,b,self.cameraMat[1],distCoef_cam2)     
+                        undCoord = processCentroids(coord,a,b,self.cameraMat[idx],distCoef[idx])
                         if self.save: dfSave.append(np.concatenate((undCoord.reshape(8),[time,imgNumber,idx])))
-                        # if ts if not read corectly, discard
+                        '''# if ts if not read corectly, discard
                         if counter[idx]:
                             if abs(time-lastTime[idx])>1e9: 
                                 if self.verbose: print('[WARNING] time missmatch')
@@ -347,7 +357,7 @@ class myServer(object):
                                         if myPoints3d[0, 2] < 0: myPoints3d = -myPoints3d
                                         # add to array
                                         if not len(points3d): points3d = np.copy(myPoints3d)
-                                        else: points3d = np.vstack((points3d,myPoints3d))
+                                        else: points3d = np.vstack((points3d,myPoints3d))'''
                                             
         finally:        
             # close everything
@@ -355,7 +365,7 @@ class myServer(object):
             destroyAllWindows()
             # save results
             if self.save: np.savetxt('camTest.csv', np.array(dfSave), delimiter=',')
-            # plot results
+            '''# plot results
             points3dNew = points3d*self.lamb/100
             fig = plt.figure(figsize=(8, 8))
             ax = plt.axes(projection='3d')
@@ -403,7 +413,7 @@ class myServer(object):
             plt.gca().invert_zaxis()
             ax.get_proj = lambda: np.dot(Axes3D.get_proj(ax), np.diag([1., 1., .3, 1.]))
             plt.draw()
-            plt.show()
+            plt.show()'''
  
             
 # parser for command line
@@ -417,7 +427,7 @@ parser.add_argument('--verbose',help='show points capture after end of recording
 parser.add_argument('--help', action='help', default=argparse.SUPPRESS, help='show this help message and exit.')
 parser.add_argument('-out', help='write the rotation matrix and translation vector(default: off)',default=False, action='store_true')
 parser.add_argument('-save',help='save received packages to CSV (default: off)',default=False, action='store_true')
-parser.add_argument('-ip',type=str,help='IP from first camera (default: 192.168.0.102)',default='192.168.0.102')
+parser.add_argument('-ip',type=str,help='List of IPs of each camera, in order',default='')
 args = parser.parse_args()
 
 myServer_ = myServer(args.n,args.trig,args.rec,args.fps,args.verbose,args.out,args.save,args.ip)

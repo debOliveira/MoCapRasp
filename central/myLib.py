@@ -1,6 +1,8 @@
 import numpy as np
 from sklearn import linear_model
 from cv2.fisheye import undistortPoints
+from itertools import permutations,combinations
+from cv2 import COLOR_GRAY2RGB,cvtColor,line,circle
 
 def isCollinear(p0, p1, p2):
     X,y = [[p0[0]],[p1[0]],[p2[0]]],[p0[1], p1[1], p2[1]]      
@@ -253,4 +255,93 @@ def processCentroids(coord,a0,b0,cameraMatrix,distCoef):
         undCoord[i] = [undCoord[i][0]+b0-5,undCoord[i][1]+a0-5] 
     undCoord = myUndistortPointsFisheye(undCoord,cameraMatrix,distCoef)  
     return undCoord
+
+def isEqual4(pt,tol=5):
+    A,B,C,D = pt[0],pt[1],pt[2],pt[3]
+    AB,AC,BC = np.linalg.norm(A-B),np.linalg.norm(A-C),np.linalg.norm(C-B)
+    AD,BD,CD = np.linalg.norm(A-D),np.linalg.norm(B-D),np.linalg.norm(C-D)
+    return min(AB,AC,BC,AD,BD,CD)<tol
+
+def getEpilineCoef(pts,F):
+    [a,b,c]=np.matmul(F,np.hstack((pts,1))) #ax+by+c=0
+    return [a,b,c]/(np.sqrt(pow(a,2)+pow(b,2)))
+
+def getDistance2Line(lines,pts):
+    pts,out,lines = np.copy(pts).reshape(-1,2),[],np.copy(lines).reshape(-1,3)
+    for [a,b,c] in lines:
+        for [x,y] in pts: out.append(abs(a*x+b*y+c)/np.sqrt(np.sqrt(pow(a,2)+pow(b,2))))
+    return np.array(out)<5,np.array(out)   
+
+def drawlines(img1,img2,lines,pts1,pts2):
+    r,c = img1.shape
+    img1 = cvtColor(img1.astype('float32'),COLOR_GRAY2RGB)
+    img2 = cvtColor(img2.astype('float32'),COLOR_GRAY2RGB)
+    listColors = [(0,0,255),(0,255,0),(255,0,0),(255,0,255)]
+    i = 0
+    for r,pt1,pt2 in zip(lines,pts1,pts2):
+        color = listColors[i]
+        x0,y0 = map(int, [0, -r[2]/r[1] ])
+        x1,y1 = map(int, [c, -(r[2]+r[0]*c)/r[1] ])
+        img1 = line(img1, (x0,y0), (x1,y1), color,1)
+        img1 = circle(img1,tuple(pt1),5,color,-1)
+        img2 = circle(img2,tuple(pt2),5,color,-1)
+        i+=1
+    return img1,img2
+
+def findPlane(A,C,D):
+    x1,y1,z1 = A
+    x2,y2,z2 = C
+    x3,y3,z3 = D
+    a1,b1,c1 = x2-x1,y2-y1,z2-z1
+    a2,b2,c2 = x3-x1,y3-y1,z3-z1
+    a,b,c = b1*c2-b2*c1,a2*c1-a1*c2,a1*b2-b1*a2
+    d=(-a*x1-b*y1-c*z1)
+    return np.array([a,b,c,d])
+
+def getOrderPerEpiline(coord1,coord2,nMarkers,F):
+    # get data
+    pts1,pts2,orderSecondFrame = np.copy(coord1).reshape(-1,2),np.copy(coord2).reshape(-1,2),np.ones(nMarkers,dtype=np.int8)*-1
+    epilines = np.zeros((nMarkers,3))
+    choosenIdx,allDists = [],[]
+    for i in range(nMarkers):
+        epilines[i] = getEpilineCoef(pts1[i],F)        
+    allPermuationsOf4 = np.array(list(permutations(list(range(0,nMarkers)))))
+    # get all possible distances between point/line
+    for idx2 in allPermuationsOf4:
+        newPts2,dist = pts2[idx2],0
+        for k in range(nMarkers):
+            _,aux= getDistance2Line(epilines[k],newPts2[k])
+            dist+=aux
+        allDists.append(dist)
+    # get minimum distance
+    minDist = min(allDists)
+    # get all idx with 1 pixels distance from the mininum distance combination
+    choosenIdx = allPermuationsOf4[np.where(allDists<=minDist+1)[0]]
+    # id there are more than 1 combination possible, find ambiguous blobs
+    if len(choosenIdx)>1:
+        # initiate variables
+        allCombinationsOf2 = np.array(list(combinations(list(range(0,len(choosenIdx))),2)))
+        mask = np.ones(nMarkers,dtype=np.bool)
+        # get common idx from all ambiguous combinations
+        for idx in allCombinationsOf2:
+            nowMask = np.equal(choosenIdx[idx[0]],choosenIdx[idx[1]])
+            mask*=nowMask
+        # invert mask to find the blobs that differs in each image
+        mask = np.invert(mask)
+        idxAmbiguous1,idxAmbiguous2 = np.where(mask)[0],choosenIdx[0][mask]
+        collinearPts1,collinearPts2 = pts1[idxAmbiguous1],pts2[idxAmbiguous2]
+        # sort per X
+        if np.all(np.diff(np.sort(collinearPts2[:,0]))>2) and np.all(np.diff(np.sort(collinearPts1[:,0]))>2):
+            order1,order2 = np.argsort(collinearPts1[:,0]),np.argsort(collinearPts2[:,0])
+            idx1 = np.hstack((collinearPts1,idxAmbiguous1.reshape(idxAmbiguous1.shape[0],-1)))[order1,-1].T
+            idx2 = np.hstack((collinearPts2,idxAmbiguous2.reshape(idxAmbiguous2.shape[0],-1)))[order2,-1].T
+        else: # sort per Y
+            order1,order2 = np.argsort(collinearPts1[:,1]),np.argsort(collinearPts2[:,1])
+            idx1 = np.hstack((collinearPts1,idxAmbiguous1.reshape(idxAmbiguous1.shape[0],-1)))[order1,-1].T
+            idx2 = np.hstack((collinearPts2,idxAmbiguous2.reshape(idxAmbiguous2.shape[0],-1)))[order2,-1].T
+        orderSecondFrame = choosenIdx[0]
+        orderSecondFrame[idx1.astype(int)] = idx2.astype(int)
+    else: orderSecondFrame = choosenIdx[0]
+
+    return orderSecondFrame
 

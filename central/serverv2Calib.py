@@ -8,22 +8,7 @@ from myLib import orderCenterCoord,estimateFundMatrix_8norm,decomposeEssentialMa
 from constants import cameraMat,distCoef
 import matplotlib.pyplot as plt
 from scipy.interpolate import CubicSpline
-
-def drawlines(img1,img2,lines,pts1,pts2):
-    r,c = img1.shape
-    img1 = cvtColor(img1.astype('float32'),COLOR_GRAY2BGR)
-    img2 = cvtColor(img2.astype('float32'),COLOR_GRAY2BGR)
-    listColors = [(0,0,255),(0,255,0),(255,0,0)]
-    i = 0
-    for r,pt1,pt2 in zip(lines,pts1,pts2):
-        color = listColors[i]
-        x0,y0 = map(int, [0, -r[2]/r[1] ])
-        x1,y1 = map(int, [c, -(r[2]+r[0]*c)/r[1] ])
-        img1 = line(img1, (x0,y0), (x1,y1), color,1)
-        img1 = circle(img1,tuple(pt1),5,color,-1)
-        img2 = circle(img2,tuple(pt2),5,color,-1)
-    i+=1
-    return img1,img2
+from mpl_toolkits.mplot3d import Axes3D
 
 class myServer(object):
     def __init__(self,numberCameras,triggerTime,recTime,FPS,verbose,output,save,ipList):
@@ -120,7 +105,7 @@ class myServer(object):
         swap,certainty = np.zeros(self.numberCameras,dtype=np.uint16),np.zeros(self.numberCameras,dtype=np.bool8)
         lastImgNumber,tol = np.zeros(self.numberCameras,dtype=np.int32),0.25
         intervals,timeIntervals,dfSave,dfOrig = [],[],[],[]
-        rotation,translation,scale,FMatrix = [np.identity(3)],[[[0., 0., 0.]]],[],[]
+        rotation,translation,scale,FMatrix,points3D_perPair, = [np.identity(3)],[[[0., 0., 0.]]],[[1]],[],[]
         for i in range(self.numberCameras): 
             intervals.append([])
             timeIntervals.append([])
@@ -211,10 +196,10 @@ class myServer(object):
                 if certainty[idx]:
                     beg,end = intervals[idx][-1],counter[idx]-1
                     timeIntervals[idx].append([dfOrig[idx][beg,6],dfOrig[idx][end,6]])    
-                    print('[INFO] camera #'+str(idx)+' valid from '+str(round(dfOrig[idx][beg,6]/1e6,2))+'s to '+str(round(dfOrig[idx][end,6]/1e6,2))+'s')
+                    if self.verbose: print('[WARNING-CAM+'+str(idx)+'] valid from '+str(round(dfOrig[idx][beg,6]/1e6,2))+'s to '+str(round(dfOrig[idx][end][6]/1e6,2))+'s')
             # print results
             print('[RESULTS] server results are')
-            for i in range(self.numberCameras): print('  >> camera '+str(i)+': '+str(len(dfOrig[i]))+' captured valid images images, address '+str(self.ipList[i])+', missed '+str(int(missed[i]))+' images')
+            for i in range(self.numberCameras): print('  >> camera '+str(i)+': '+str(len(dfOrig[i]))+' valid images, address '+str(self.ipList[i])+', missed '+str(int(missed[i]))+' images')
             if self.save: np.savetxt('camCalib.csv', np.array(dfSave), delimiter=',')
             # get pose between each pair
             for j in range(self.numberCameras-1):
@@ -222,7 +207,7 @@ class myServer(object):
                 intersections = [[max(first[0], second[0]), min(first[1], second[1])]  
                                     for first in timeIntervals[j] for second in timeIntervals[j+1]  
                                     if max(first[0], second[0]) <= min(first[1], second[1])]
-                # interpolate at intersections
+                # create and fill inteprolation dataset based on the intersection of valid time intervals 
                 dfInterp = np.zeros((self.nImages,2*6+1))
                 dfInterp[:,-1] = np.linspace(0,self.recTime,self.nImages)
                 for [beg,end] in intersections:
@@ -235,18 +220,19 @@ class myServer(object):
                         tNew = np.linspace(lowBound,highBound,int((highBound-lowBound))+1,dtype=np.uint16)
                         ff = CubicSpline(time,coord,axis=0)
                         dfInterp[tNew,int((idx-j)*6):int((idx-j)*6+6)] = ff(tNew*self.step)
-                # get data
+                # get data from the interpolation dataset
                 dfInterp = np.delete(dfInterp,np.unique([i for i in range(0,dfInterp.shape[0]) for idx in range(2) if not np.any(dfInterp[i][idx*6:idx*6+6])]),axis=0)
                 if dfInterp.shape[0] < 10: 
                     print('[ERROR] no valid image intersection for cameras '+str(j)+' and '+str(j+1))
                     return
                 centroids1,centroids2 = dfInterp[:,0:6].reshape(-1,2),dfInterp[:,6:12].reshape(-1,2)
+                print('[WARNING] interpolated '+str(dfInterp.shape[0])+' images between cameras '+str(j)+' and '+str(j+1))
                 # get fundamental and essential matrices 
                 print('[INFO] Computing fundamental and essential matrix between cameras '+str(j)+'-'+str(j+1))
                 try: 
                     F,_ = estimateFundMatrix_8norm(np.array(centroids1),np.array(centroids2),verbose=False)
                     E = np.matmul(self.cameraMat[j+1].T, np.matmul(F, self.cameraMat[j]))
-                # decompose to rotation and translation between cameras
+                    # decompose to rotation and translation between cameras
                     R, t = decomposeEssentialMat(E, self.cameraMat[j], self.cameraMat[j+1], np.array(centroids1), np.array(centroids2))
                     if np.any(np.isnan(R)): 
                         print('[ERROR] no valid rotation matrix')
@@ -258,6 +244,7 @@ class myServer(object):
                 except: 
                     print('[ERROR] no valid rotation matrix')
                     return
+                # create projection matrices and triangulate to compute scale
                 P1,P2 = np.hstack((self.cameraMat[j], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[j+1], np.hstack((R, t.T)))
                 projPt1,projPt2 = myProjectionPoints(np.array(centroids1)),myProjectionPoints(np.array(centroids2))
                 points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
@@ -278,8 +265,8 @@ class myServer(object):
                         i+=1
                         false_idx.extend((k,k+1,k+2))
                     k+=3
-                print("[INFO] Images distant more than 1% from the real value = " + str(i)+'/'+str(int(points3d.shape[0]/3)))
-                # refining estimation
+                print("\tImages distant more than 1% from the real value = " + str(i)+'/'+str(int(points3d.shape[0]/3)))
+                # deleting points and refining estimation of the fundamental and essential matrices
                 print("[INFO] Refining fundamental matrix estimation")
                 centroids1,centroids2=np.delete(np.copy(centroids1),false_idx,axis=0),np.delete(np.copy(centroids2),false_idx,axis=0)
                 # get fundamental and essential matrices
@@ -309,38 +296,81 @@ class myServer(object):
                     L_BC_vec.append(L_rec_BC)
                     L_AB_vec.append(L_rec_AB)
                 lamb = tot/k
-                print('[INFO] Scale between real world and triang. point cloud is: ', lamb.round(2))
-                print('[INFO] L_AC >> mean = ' + str((np.mean(L_AC_vec)*lamb).round(4)) +
+                print('\tScale between real world and triang. point cloud is: ', lamb.round(2))
+                print('\tL_AC >> mean = ' + str((np.mean(L_AC_vec)*lamb).round(4)) +
                     "cm, std. dev = " + str((np.std(L_AC_vec)*lamb).round(4)) +
                     "cm, rms = " + str((np.sqrt(np.mean(np.square(np.array(L_AC_vec)*lamb-L_real_AC)))).round(4)) + "cm")
-                print('[INFO] L_AB >> mean = ' + str((np.mean(L_AB_vec)*lamb).round(4)) +
+                print('\tL_AB >> mean = ' + str((np.mean(L_AB_vec)*lamb).round(4)) +
                     "cm, std. dev = " + str((np.std(L_AB_vec)*lamb).round(4)) +
                     "cm, rms = " + str((np.sqrt(np.mean(np.square(np.array(L_AB_vec)*lamb-L_real_AB)))).round(4)) + "cm")
-                print('[INFO] L_BC >> mean = ' + str((np.mean(L_BC_vec)*lamb).round(4)) +
+                print('\tL_BC >> mean = ' + str((np.mean(L_BC_vec)*lamb).round(4)) +
                     "cm, std. dev = " + str((np.std(L_BC_vec)*lamb).round(4)) +
                     "cm, rms = " + str((np.sqrt(np.mean(np.square(np.array(L_BC_vec)*lamb-L_real_BC)))).round(4)) + "cm")
                 translation.append(t)
                 rotation.append(R)
                 scale.append([lamb])
                 FMatrix.append(F)
-                # epipolar lines
-                img1,img2 = np.ones(np.flip(self.imageSize[j][0:2]))*255,np.ones(np.flip(self.imageSize[j+1][0:2]))*255
-                pts1,pts2 = np.int32(centroids1[0:3].reshape(-1,2)),np.int32(centroids2[0:3].reshape(-1,2))
-                lines1 = computeCorrespondEpilines(pts2.reshape(-1,1,2), 2,F)
-                lines1 = lines1.reshape(-1,3)
-                img5,_ = drawlines(img1,img2,lines1,pts1,pts2)
-                lines2 = computeCorrespondEpilines(pts1.reshape(-1,1,2), 1,F)
-                lines2 = lines2.reshape(-1,3)
-                img3,_ = drawlines(img2,img1,lines2,pts2,pts1)
-                plt.figure(figsize=(20, 16))
-                plt.subplot(121),plt.imshow(img5)
-                plt.subplot(122),plt.imshow(img3)
-                plt.show()
-            
+                points3D_perPair.append(points3d)
+            # saving csv
             np.savetxt('R.csv', np.ravel(rotation), delimiter=',')
             np.savetxt('t.csv', np.ravel(translation), delimiter=',')
             np.savetxt('lamb.csv', np.ravel(scale), delimiter=',')
             np.savetxt('F.csv', np.ravel(FMatrix), delimiter=',')
+            # setting 3D plot variables
+            fig = plt.figure(figsize=(8, 8),dpi=100)
+            ax = plt.axes(projection='3d')
+            ax.set_xlim(-1, 4)
+            ax.set_zlim(-6, 0)
+            ax.set_ylim(-1, 4)
+            ax.set_xlabel('X')
+            ax.set_ylabel('Z')
+            ax.set_zlabel('Y')
+            ax.set_xlabel('X', fontweight='bold',labelpad=15)
+            ax.set_ylabel('Z', fontweight='bold',labelpad=15)
+            ax.set_zlabel('Y', fontweight='bold',labelpad=5)
+            cmhot = plt.get_cmap("jet")
+            ax.view_init(elev=30, azim=-50) 
+            plt.gca().invert_zaxis()
+            ax.get_proj = lambda: np.dot(Axes3D.get_proj(ax), np.diag([1., 1., .5, 1.]))
+            colours = [['fuchsia','plum'],['darkorange','gold'],['limegreen','greenyellow'],['blue','lightsteelblue']]
+            # initializing arrays
+            allPts3d,projMat = [],[]            
+            # getting coordinates from each camera and 3D points in relation to the 0th camera
+            for j in range(self.numberCameras):
+                # initialize initial values of the projection matrices
+                x,y,z= np.array([1, 0, 0, 0]), np.array([0, 1, 0, 0]),np.array([0, 0, 1, 0])
+                P_new = np.vstack((np.hstack((np.identity(3),np.zeros((3,1)))),np.hstack((np.zeros((3)),1))))
+                # iterate over the previous cameras to find the relation to the 0th camera
+                # e.g. 3 -> 2 -> 1 -> 0
+                for i in np.flip(range(j+1)):
+                    t,R,lamb = np.array(translation[i][0]).reshape(-1,3),np.array(rotation[i]),scale[i]
+                    t_new = np.matmul(-t, R).reshape(-1,3)*lamb/100
+                    P = np.vstack((np.hstack((R.T,t_new.T)),np.hstack((np.zeros((3)),1))))
+                    P_new = np.matmul(P,P_new)
+                # save new projection matrix
+                projMat.append(P_new)
+                # plot camera pose
+                x,y,z = np.matmul(P_new,x),np.matmul(P_new,y),np.matmul(P_new,z)
+                o = np.matmul(P_new,[[0.],[0.],[0.],[1]]).ravel()
+                ax.quiver(o[0], o[2], o[1], x[0], x[2], x[1], arrow_length_ratio=0.05, edgecolors="r", label='X axis')
+                ax.quiver(o[0], o[2], o[1], y[0], y[2], y[1], arrow_length_ratio=0.05, edgecolors="b", label='Y axis')
+                ax.quiver(o[0], o[2], o[1], z[0], z[2], z[1], arrow_length_ratio=0.05, edgecolors="g", label='Z axis')
+                ax.scatter(o[0], o[2], o[1], s=50, edgecolor=colours[j][0], facecolor=colours[j][1], linewidth=2,  label = 'Camera '+str(j))
+                # save triangulated 3D points in relation to the 0th camera
+                if j<(self.numberCameras-1):
+                    points3d = np.hstack((points3D_perPair[j]*scale[j+1][0]/100,np.ones((points3D_perPair[j].shape[0],1)))).T
+                    points3d = np.matmul(P_new,points3d)
+                    ax.scatter(points3d[0], points3d[2], points3d[1], s=50, c=points3d[2], cmap=cmhot)
+                    if not len(allPts3d): allPts3d = points3d.copy()
+                    else: allPts3d = np.hstack((allPts3d,points3d.copy()))
+
+            # final plot commands
+            handles, labels = plt.gca().get_legend_handles_labels()
+            by_label = dict(zip(labels, handles))
+            plt.legend(by_label.values(), by_label.keys(),ncol=3,loc ='center',edgecolor='silver', bbox_to_anchor=(0.5, 0.8))
+            plt.title('3D map of the calibrated arena')
+            plt.draw()
+            plt.show()
             
  
             
