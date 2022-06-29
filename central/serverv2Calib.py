@@ -209,7 +209,7 @@ class myServer(object):
                                     if max(first[0], second[0]) <= min(first[1], second[1])]
                 # create and fill inteprolation dataset based on the intersection of valid time intervals 
                 dfInterp = np.zeros((self.nImages,2*6+1))
-                dfInterp[:,-1] = np.linspace(0,self.recTime,self.nImages)
+                dfInterp[:,-1] = np.arange(0,self.recTime,self.step)
                 for [beg,end] in intersections:
                     for idx in range(j,j+2):
                         validIdx = [i for i in range(0,len(dfOrig[idx])) if beg<=dfOrig[idx][i,-1]<=end]
@@ -363,7 +363,8 @@ class myServer(object):
                     ax.scatter(points3d[0], points3d[2], points3d[1], s=50, c=points3d[2], cmap=cmhot)
                     if not len(allPts3d): allPts3d = points3d.copy()
                     else: allPts3d = np.hstack((allPts3d,points3d.copy()))
-
+            # saving projection matrices
+            np.savetxt('projMat.csv', np.array(projMat).ravel(), delimiter=',')
             # final plot commands
             handles, labels = plt.gca().get_legend_handles_labels()
             by_label = dict(zip(labels, handles))
@@ -371,6 +372,7 @@ class myServer(object):
             plt.title('3D map of the calibrated arena')
             plt.draw()
             plt.show()
+            
             
  
             
