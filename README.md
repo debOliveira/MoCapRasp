@@ -26,14 +26,16 @@ This repository stores an **open optical tracking/motion capture system using pa
 
 ### Camera
 
-1) Connect the camera to a RPi and capture a calibration data set using [`./calib`](/calib/). Then run [camera calibrator application](https://github.com/debOliveira/myCameraCalibrator).
+1) Connect the camera to a RPi and capture a calibration data set using [`./calib`](/calib/). 
+1)  Run [camera calibrator application](https://github.com/debOliveira/myCameraCalibrator).
 1) Construct the boxes to the cameras using cardboard. I used a 8cm X 8cm X 4cm box. Remeber to cut a hole in the center for the camera lens and the LED power input, and at the back for the flat cable and power cable of the LED ring. Leave the front open.
 1) I cutted a 3mm X 3mm square at the bottom to fit the gymbal tip. Then I did four little holes to pass a string (in a X format, at the outter side of the boox) to hold the box to the gymbal base.
-1) Weld the LED to the power source or connect it to the circuit pins. You may find the design of the circuit board here.
-1) Put the filter over the camera lens and cover the rest with 
-insulating tape. I did the hoel for the lens using a compass. 
-1) Put the camera+filter back at the box, check if the LED is powering on and fit the gymbal tip through the hole at the bottom of the box. Then pass the string behind the gymbal bar and tie a not to secure it over the gymbal base.
-1) If everything is working, you can now close de box. Double check to avoid opening the box multiple times
+1) Weld the LED to the power source or connect it to the turn on/off circuit pins. 
+1) Put the filter over the camera lens and cover the rest with insulating tape.
+1) Put the camera+filter back at the box, check if the LED is powering on and fit the gymbal tip through the hole at the bottom of the box. 
+1) Pass the string behind the gymbal bar and tie a not to secure it over the gymbal base.
+1) If everything is working, you can now close de box. 
+1)Double check to avoid opening the box multiple times.
 1) If you have light leakeage trough the lens, add a black cardboard ring inside the LED ring. 
 
 ### Server
@@ -42,8 +44,8 @@ insulating tape. I did the hoel for the lens using a compass.
 
 ### Clients
 
-1) Connect each RPi to a camera. The system has a 1cm accuracy when using 4 cameras, but the number can be expanded to improve cover area
-1) Put a cooler over each RPi. The high FPS will heat to 80C and activate frequency capping if no ventilation is directly over the processor
+1) Connect each RPi to a camera. The system has a 1cm accuracy when using 4 cameras, but the number can be expanded to improve cover.
+1) Put a cooler over each RPi. The high FPS will heat to 80C and activate frequency capping if no ventilation is directly over the processor.
 1) Read the instructions at [`./collect`](/collect/)
 
 ## Usage
