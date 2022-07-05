@@ -1,1 +1,0 @@
-sudo ptpd -C -M -i eth0 -V

@@ -1,4 +1,0 @@
-scp pi@192.168.0.102:Desktop/MoCapRasps/r3b-soft/dataset21* .
-scp pi@192.168.0.103:Desktop/MocapRAsps/r4mine-st/dataset21* .
-
-zip -r datasetX_camX.zip pics/ results.csv bg.jpg
