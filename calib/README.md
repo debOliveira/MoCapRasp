@@ -17,7 +17,7 @@ mkdir pics
 - Have a bright light source directly behind the camera.
     * I use a ring light
 - Print a [calibration pattern](https://docs.opencv.org/4.x/da/d0d/tutorial_camera_calibration_pattern.html).
-    * I used a 11 X 12 with 30cm side square
+    * I used a 11 X 12 with 30cm side square [[PDF here](https://github.com/debOliveira/myCameraCalibrator/tree/main/python/pdf)].
 
 ## Setting parameters
 
