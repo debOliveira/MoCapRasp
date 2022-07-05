@@ -2,8 +2,6 @@
 
 This repository stores an **open optical tracking/motion capture system using passive reflective markers and Raspberry Pi** boards as capturing station. This work is an result of my master dissertation entitled "Heterogeneous optical tracking system for mobile vehicles". 
 
-## Arena pictures
-
 ## Materials
 
 - Two (*minimum*) Raspberry 3b or above
@@ -51,3 +49,9 @@ Each folder has its own `README.md` guide file. Please read each one and adjust 
 - [`./calib`](/calib/) stores the code to collect the images used in intrinsics calibration. 
 - [`./central`](/central/) has the codes of the server side.
 - [`./collect`](/collect/) comprises the files used in the clients. 
+
+## Arena pictures
+
+- [Full arena with 2 cameras](https://photos.app.goo.gl/bub5wwFEi5pR14ov5)
+- Capture station [[1](https://photos.app.goo.gl/WmQuUtYHV3ZL1rLY8)] and [[2](https://photos.app.goo.gl/WmQuUtYHV3ZL1rLY8)]
+- Camera box [[1](https://photos.app.goo.gl/25dToDRJKosVdfQk9)] and [[2](https://photos.app.goo.gl/nADaQRypZxPyUfSX9)]
