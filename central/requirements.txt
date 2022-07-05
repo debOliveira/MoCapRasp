@@ -1,0 +1,4 @@
+cv2>=4.1.2
+matplotlib>=3.2.2
+numpy>=1.21.6
+scipy>=1.4.1

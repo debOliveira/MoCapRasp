@@ -11,11 +11,11 @@ from scipy.interpolate import CubicSpline
 from mpl_toolkits.mplot3d import Axes3D
 
 class myServer(object):
-    def __init__(self,numberCameras,triggerTime,recTime,FPS,verbose,output,save,ipList):
+    def __init__(self,numberCameras,triggerTime,recTime,FPS,verbose,save,ipList):
         ##########################################
         # PLEASE DONT CHANGE THE VARIABLES BELOW #
         ##########################################
-        self.numberCameras,self.triggerTime,self.recTime,self.step,self.out,self.save,self.verbose,self.ipList = numberCameras,triggerTime,recTime,1/FPS,output,save,verbose,np.array(ipList.split(','))
+        self.numberCameras,self.triggerTime,self.recTime,self.step,self.save,self.verbose,self.ipList = numberCameras,triggerTime,recTime,1/FPS,save,verbose,np.array(ipList.split(','))
         # check number of ips
         if self.ipList.shape[0]!=self.numberCameras:
             print('[ERROR] Number of cameras do not match the number of IPs given')
@@ -383,13 +383,12 @@ parser.add_argument('-n',type=int,help='number of cameras (default: 2)',default=
 parser.add_argument('-trig',type=int,help='trigger time in seconds (default: 10)',default=10)
 parser.add_argument('-rec',type=int,help='recording time in seconds (default: 30)',default=30)
 parser.add_argument('-fps',type=int,help='interpolation fps (default: 100FPS)',default=100)
-parser.add_argument('--verbose',help='show points capture after end of recording time (default: off)',default=False, action='store_true')
+parser.add_argument('--verbose',help='show ordering and interpolation verbosity (default: off)',default=False, action='store_true')
 parser.add_argument('--help', action='help', default=argparse.SUPPRESS, help='show this help message and exit.')
-parser.add_argument('-out', help='write the rotation matrix and translation vector(default: off)',default=False, action='store_true')
 parser.add_argument('-save',help='save received packages to CSV (default: off)',default=False, action='store_true')
 parser.add_argument('-ip',type=str,help='List of IPs of each camera, in order',default='')
 args = parser.parse_args()
 
-myServer_ = myServer(args.n,args.trig,args.rec,args.fps,args.verbose,args.out,args.save,args.ip)
+myServer_ = myServer(args.n,args.trig,args.rec,args.fps,args.verbose,args.save,args.ip)
 myServer_.connect()
 myServer_.collect()

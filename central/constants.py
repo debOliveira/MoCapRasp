@@ -1,23 +1,4 @@
-from cv2 import SimpleBlobDetector_Params,SimpleBlobDetector_create
-from itertools import combinations
 import numpy as np
-
-params = SimpleBlobDetector_Params()  
-params.minThreshold = 0    
-params.thresholdStep = 100
-params.maxThreshold = 200
-params.filterByArea = True
-params.minArea = 20
-params.filterByConvexity = True
-params.minConvexity = 0.95
-params.minDistBetweenBlobs = 10
-params.filterByColor = True
-params.blobColor = 0
-params.minRepeatability =  1
-
-detector = SimpleBlobDetector_create(params)
-allIdx = list(range(0,4))
-allCombinationsOf3 = np.array(list(combinations(allIdx,3)))
 
 # camera matrices
 cameraMatrix_cam1 =np.array([[720.313,0,481.014],[0,719.521,360.991],[0,0,1]])
