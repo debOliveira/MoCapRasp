@@ -54,4 +54,4 @@ Each folder has its own `README.md` guide file. Please read each one and adjust 
 
 - [Full arena with 2 cameras](https://photos.app.goo.gl/bub5wwFEi5pR14ov5)
 - Capture station [[1](https://photos.app.goo.gl/WmQuUtYHV3ZL1rLY8)] and [[2](https://photos.app.goo.gl/WmQuUtYHV3ZL1rLY8)]
-- Camera box [[1](https://photos.app.goo.gl/25dToDRJKosVdfQk9)] and [[2](https://photos.app.goo.gl/nADaQRypZxPyUfSX9)]
+- Camera box [[1](https://photos.app.goo.gl/25dToDRJKosVdfQk9)], [[2](https://photos.app.goo.gl/nADaQRypZxPyUfSX9)] and [[3](https://photos.app.goo.gl/5oBvEkRgRzf9mKXy9)]
