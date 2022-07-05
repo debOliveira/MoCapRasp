@@ -16,6 +16,12 @@ This repository stores an **open optical tracking/motion capture system using pa
 - Hard cardboard to construct the camera boxes.
 - NPN FET, optocoupler, 3x 1kΩ resistors for each turn on/off circuit (you can also weld the power direct to the led ring and manually turn it on or off)
 
+## Arena pictures
+
+- [Full arena with 2 cameras](https://photos.app.goo.gl/bub5wwFEi5pR14ov5)
+- Capture station [[1](https://photos.app.goo.gl/WmQuUtYHV3ZL1rLY8)] and [[2](https://photos.app.goo.gl/WmQuUtYHV3ZL1rLY8)]
+- Camera box [[1](https://photos.app.goo.gl/25dToDRJKosVdfQk9)], [[2](https://photos.app.goo.gl/nADaQRypZxPyUfSX9)] and [[3](https://photos.app.goo.gl/5oBvEkRgRzf9mKXy9)]
+
 ## Construction
 
 ### Camera
@@ -49,9 +55,3 @@ Each folder has its own `README.md` guide file. Please read each one and adjust 
 - [`./calib`](/calib/) stores the code to collect the images used in intrinsics calibration. 
 - [`./central`](/central/) has the codes of the server side.
 - [`./collect`](/collect/) comprises the files used in the clients. 
-
-## Arena pictures
-
-- [Full arena with 2 cameras](https://photos.app.goo.gl/bub5wwFEi5pR14ov5)
-- Capture station [[1](https://photos.app.goo.gl/WmQuUtYHV3ZL1rLY8)] and [[2](https://photos.app.goo.gl/WmQuUtYHV3ZL1rLY8)]
-- Camera box [[1](https://photos.app.goo.gl/25dToDRJKosVdfQk9)], [[2](https://photos.app.goo.gl/nADaQRypZxPyUfSX9)] and [[3](https://photos.app.goo.gl/5oBvEkRgRzf9mKXy9)]
