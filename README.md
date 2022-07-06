@@ -37,7 +37,7 @@ Each folder has its own `README.md` guide file. Please read each one and adjust 
 1) Connect the camera to a RPi and capture a calibration data set using [`./calib`](/calib/). 
 2)  Run [camera calibrator application](https://github.com/debOliveira/myCameraCalibrator).
 3) Construct the boxes to the cameras using cardboard. 
-    * I used a 8cm X 8cm X 5cm box. 
+    * I used a 8cm X 8cm X 5cm box. <
     * Remeber to cut a hole in the center for the camera lens and the LED power input, and at the back for the flat cable and power cable of the LED ring.
     * I cutted a 3mm X 3mm square at the bottom to fit the gymbal tip. 
     * Then I did four little holes to pass a string to hold the box to the gymbal base.
@@ -50,6 +50,13 @@ Each folder has its own `README.md` guide file. Please read each one and adjust 
 9) If everything is working, you can now close de box. 
 11) If you have light leakeage trough the lens, add a black cardboard ring inside the LED ring. 
 
+**Here are some pictures from my camera** <p align="center">
+<img src="https://user-images.githubusercontent.com/48807586/177628962-0bc55667-9e42-4df5-b561-c19c39566cfd.png" height="300" align="center">
+<img src="https://user-images.githubusercontent.com/48807586/177629909-fe780ae5-4fff-4817-a7e8-bd28ac0e00a5.png" height="300" align="center">
+<img src="https://user-images.githubusercontent.com/48807586/177629924-51aee180-2a6a-44b6-892f-6906a22174c9.png" height="300" align="center">
+<img src="https://user-images.githubusercontent.com/48807586/177630302-cd32b6c9-6b18-49d8-9d33-7db810586d98.png" height="300" align="center">
+</p>
+    
 ### Server
 
 Read the instructions at [`./central`](/central/)
@@ -62,6 +69,11 @@ Read the instructions at [`./central`](/central/)
     > The high FPS will heat to 80C and activate frequency capping if no ventilation is directly over the processor.
 - Read the instructions at [`./collect`](/collect/)
 
+**Here are some pictures from my clients** <p align="center">
+<img src="https://user-images.githubusercontent.com/48807586/177630783-b98d915a-e8e6-4619-8d5b-ff4ae7bf9cec.png" height="300" align="center">
+<img src="https://user-images.githubusercontent.com/48807586/177630812-ef0bdeef-2afe-4c6c-b8f9-d032e451bc46.png" height="300" align="center">
+</p>
+
 ### Vehicle
 - Cover at least 4 polystyrene spheres with the reflective adehesive
     * I find it easier to cut into 3mm x 2cm pieces and glue them side by side.
@@ -69,3 +81,9 @@ Read the instructions at [`./central`](/central/)
     * I put some hot glue where the wire enters the sphere just to guarantee.
     * When the vehicle is not going to somersault, double-sided tape is enough.
      **Put at least three collinear spheres and one at a 90 degree angle to this line** 
+     
+**Here are some pictures from my markers** <p align="center">
+<img src="https://user-images.githubusercontent.com/48807586/177630503-6f5b0e17-ee9a-4331-b1da-8c471f47b91d.png" height="300" align="center">
+<img src="https://user-images.githubusercontent.com/48807586/177630567-203f1129-dc2e-4f36-b9f5-4dd15c5e4c1d.png" height="300" align="center">
+<img src="https://user-images.githubusercontent.com/48807586/177630590-ecf808d8-98f1-44f5-a3be-9fbb3b7a658d.png" height="300" align="center">
+</p>
