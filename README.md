@@ -7,7 +7,7 @@
 
 This repository stores an **open optical tracking/motion capture system using passive reflective markers and Raspberry Pi**. 
 
-> This work is an result of my master dissertation entitled "Heterogeneous optical tracking system for mobile vehicles". 
+> This work is an result of my master dissertation titled "Heterogeneous optical tracking system for mobile vehicles". 
 
 ## Usage
 
