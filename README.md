@@ -4,12 +4,15 @@ This repository stores an **open optical tracking/motion capture system using pa
 
 > This work is an result of my master dissertation entitled "Heterogeneous optical tracking system for mobile vehicles". 
 
-### Arena pictures
+## Usage
 
-- [Full arena with 2 cameras](https://photos.app.goo.gl/bub5wwFEi5pR14ov5)
-- Capture station [[1](https://photos.app.goo.gl/WmQuUtYHV3ZL1rLY8)] and [[2](https://photos.app.goo.gl/WmQuUtYHV3ZL1rLY8)]
-- Camera box [[1](https://photos.app.goo.gl/25dToDRJKosVdfQk9)], [[2](https://photos.app.goo.gl/nADaQRypZxPyUfSX9)] and [[3](https://photos.app.goo.gl/5oBvEkRgRzf9mKXy9)]
+Each folder has its own `README.md` guide file. Please read each one and adjust both your server and clients. 
 
+## Organisation
+    
+- [`./calib`](/calib/) stores the code to collect the images used in intrinsics calibration. 
+- [`./central`](/central/) has the codes of the server side.
+- [`./collect`](/collect/) comprises the files used in the clients. 
 
 ## Materials
 
@@ -26,6 +29,7 @@ This repository stores an **open optical tracking/motion capture system using pa
 - Hard cardboard to construct the camera boxes.
 - NPN FET, optocoupler, 3x 1kΩ resistors for each turn on/off circuit 
     * You can also weld the power direct to the led ring and manually turn it on or off
+    
 ## Construction
 
 ### Camera
@@ -65,13 +69,3 @@ Read the instructions at [`./central`](/central/)
     * I put some hot glue where the wire enters the sphere just to guarantee.
     * When the vehicle is not going to somersault, double-sided tape is enough.
      **Put at least three collinear spheres and one at a 90 degree angle to this line** 
-
-## Usage
-
-Each folder has its own `README.md` guide file. Please read each one and adjust both your server and clients. 
-
-## Organisation
-    
-- [`./calib`](/calib/) stores the code to collect the images used in intrinsics calibration. 
-- [`./central`](/central/) has the codes of the server side.
-- [`./collect`](/collect/) comprises the files used in the clients. 
