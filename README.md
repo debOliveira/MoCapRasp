@@ -83,7 +83,6 @@ Read the instructions at [`./central`](/central/)
      **Put at least three collinear spheres and one at a 90 degree angle to this line** 
      
 **Here are some pictures from my markers** <p align="center">
-<img src="https://user-images.githubusercontent.com/48807586/177630503-6f5b0e17-ee9a-4331-b1da-8c471f47b91d.png" height="300" align="center">
 <img src="https://user-images.githubusercontent.com/48807586/177630567-203f1129-dc2e-4f36-b9f5-4dd15c5e4c1d.png" height="300" align="center">
 <img src="https://user-images.githubusercontent.com/48807586/177630590-ecf808d8-98f1-44f5-a3be-9fbb3b7a658d.png" height="300" align="center">
 </p>
