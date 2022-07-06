@@ -1,4 +1,4 @@
-# MoCapRasps ![Status](https://img.shields.io/static/v1?style=flat&logo=github&label=status&message=on%20going&color=blue) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)  
+# MoCapRasp ![Status](https://img.shields.io/static/v1?style=flat&logo=github&label=status&message=on%20going&color=blue) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)  
 
 This repository stores an **open optical tracking/motion capture system using passive reflective markers and Raspberry Pi** boards as capturing station. 
 
