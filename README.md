@@ -33,7 +33,7 @@ This repository stores an **open optical tracking/motion capture system using pa
 1) Connect the camera to a RPi and capture a calibration data set using [`./calib`](/calib/). 
 2)  Run [camera calibrator application](https://github.com/debOliveira/myCameraCalibrator).
 3) Construct the boxes to the cameras using cardboard. 
-    * I used a 8cm X 8cm X 4cm box. 
+    * I used a 8cm X 8cm X 5cm box. 
     * Remeber to cut a hole in the center for the camera lens and the LED power input, and at the back for the flat cable and power cable of the LED ring.
     * I cutted a 3mm X 3mm square at the bottom to fit the gymbal tip. 
     * Then I did four little holes to pass a string to hold the box to the gymbal base.
