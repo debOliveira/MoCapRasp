@@ -3,7 +3,7 @@ import warnings
 warnings.filterwarnings("ignore")
 import socket,time,math,argparse
 import numpy as np
-from cv2 import circle,destroyAllWindows,triangulatePoints,cvtColor,line,COLOR_GRAY2BGR,computeCorrespondEpilines
+from cv2 import destroyAllWindows,triangulatePoints
 from myLib import orderCenterCoord,estimateFundMatrix_8norm,decomposeEssentialMat,myProjectionPoints,isCollinear,isEqual,processCentroids
 from constants import cameraMat,distCoef
 import matplotlib.pyplot as plt
@@ -200,7 +200,7 @@ class myServer(object):
             # print results
             print('[RESULTS] server results are')
             for i in range(self.numberCameras): print('  >> camera '+str(i)+': '+str(len(dfOrig[i]))+' valid images, address '+str(self.ipList[i])+', missed '+str(int(missed[i]))+' images')
-            if self.save: np.savetxt('camCalib.csv', np.array(dfSave), delimiter=',')
+            if self.save: np.savetxt('data/camCalib.csv', np.array(dfSave), delimiter=',')
             # get pose between each pair
             for j in range(self.numberCameras-1):
                 # compute valid time intersection for interpolation
@@ -312,10 +312,10 @@ class myServer(object):
                 FMatrix.append(F)
                 points3D_perPair.append(points3d)
             # saving csv
-            np.savetxt('R.csv', np.ravel(rotation), delimiter=',')
-            np.savetxt('t.csv', np.ravel(translation), delimiter=',')
-            np.savetxt('lamb.csv', np.ravel(scale), delimiter=',')
-            np.savetxt('F.csv', np.ravel(FMatrix), delimiter=',')
+            np.savetxt('data/R.csv', np.ravel(rotation), delimiter=',')
+            np.savetxt('data/t.csv', np.ravel(translation), delimiter=',')
+            np.savetxt('data/lamb.csv', np.ravel(scale), delimiter=',')
+            np.savetxt('data/F.csv', np.ravel(FMatrix), delimiter=',')
             # setting 3D plot variables
             fig = plt.figure(figsize=(8, 8),dpi=100)
             ax = plt.axes(projection='3d')
@@ -364,7 +364,7 @@ class myServer(object):
                     if not len(allPts3d): allPts3d = points3d.copy()
                     else: allPts3d = np.hstack((allPts3d,points3d.copy()))
             # saving projection matrices
-            np.savetxt('projMat.csv', np.array(projMat).ravel(), delimiter=',')
+            np.savetxt('data/projMat.csv', np.array(projMat).ravel(), delimiter=',')
             # final plot commands
             handles, labels = plt.gca().get_legend_handles_labels()
             by_label = dict(zip(labels, handles))

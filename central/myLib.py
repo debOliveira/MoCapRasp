@@ -2,7 +2,9 @@ import numpy as np
 from sklearn import linear_model
 from cv2.fisheye import undistortPoints
 from itertools import permutations,combinations
-from cv2 import COLOR_GRAY2RGB,cvtColor,line,circle
+from cv2 import COLOR_GRAY2RGB,cvtColor,line,circle,FONT_HERSHEY_SIMPLEX,putText
+import math
+from scipy.interpolate import CubicSpline
 
 def isCollinear(p0, p1, p2):
     X,y = [[p0[0]],[p1[0]],[p2[0]]],[p0[1], p1[1], p2[1]]      
@@ -256,23 +258,38 @@ def processCentroids(coord,a0,b0,cameraMatrix,distCoef):
     undCoord = myUndistortPointsFisheye(undCoord,cameraMatrix,distCoef)  
     return undCoord
 
+# check if there is occlusion
 def isEqual4(pt,tol=5):
     A,B,C,D = pt[0],pt[1],pt[2],pt[3]
     AB,AC,BC = np.linalg.norm(A-B),np.linalg.norm(A-C),np.linalg.norm(C-B)
     AD,BD,CD = np.linalg.norm(A-D),np.linalg.norm(B-D),np.linalg.norm(C-D)
     return min(AB,AC,BC,AD,BD,CD)<tol
 
+# get epiline coeficients based on the fundamental matrix
 def getEpilineCoef(pts,F):
     [a,b,c]=np.matmul(F,np.hstack((pts,1))) #ax+by+c=0
     return [a,b,c]/(np.sqrt(pow(a,2)+pow(b,2)))
 
+# get the distance between a point and a line
 def getDistance2Line(lines,pts):
     pts,out,lines = np.copy(pts).reshape(-1,2),[],np.copy(lines).reshape(-1,3)
     for [a,b,c] in lines:
         for [x,y] in pts: out.append(abs(a*x+b*y+c)/np.sqrt(np.sqrt(pow(a,2)+pow(b,2))))
-    return np.array(out)<5,np.array(out)   
+    return np.array(out)<5,np.array(out)    
 
-def drawlines(img1,img2,lines,pts1,pts2):
+# find a plane that passes between three points
+def findPlane(A,C,D):
+    x1,y1,z1 = A
+    x2,y2,z2 = C
+    x3,y3,z3 = D
+    a1,b1,c1 = x2-x1,y2-y1,z2-z1
+    a2,b2,c2 = x3-x1,y3-y1,z3-z1
+    a,b,c = b1*c2-b2*c1,a2*c1-a1*c2,a1*b2-b1*a2
+    d=(-a*x1-b*y1-c*z1)
+    return np.array([a,b,c,d])
+
+# draw epipolar lines with numbers
+def drawlines(img1,img2,lines,pts1,pts2):    
     r,c = img1.shape
     img1 = cvtColor(img1.astype('float32'),COLOR_GRAY2RGB)
     img2 = cvtColor(img2.astype('float32'),COLOR_GRAY2RGB)
@@ -284,21 +301,14 @@ def drawlines(img1,img2,lines,pts1,pts2):
         x1,y1 = map(int, [c, -(r[2]+r[0]*c)/r[1] ])
         img1 = line(img1, (x0,y0), (x1,y1), color,1)
         img1 = circle(img1,tuple(pt1),5,color,-1)
+        putText(img1,str(i),tuple(pt1-20),FONT_HERSHEY_SIMPLEX,0.5,color,2) 
         img2 = circle(img2,tuple(pt2),5,color,-1)
+        putText(img2,str(i),tuple(pt2-20),FONT_HERSHEY_SIMPLEX,0.5,color,2) 
         i+=1
     return img1,img2
 
-def findPlane(A,C,D):
-    x1,y1,z1 = A
-    x2,y2,z2 = C
-    x3,y3,z3 = D
-    a1,b1,c1 = x2-x1,y2-y1,z2-z1
-    a2,b2,c2 = x3-x1,y3-y1,z3-z1
-    a,b,c = b1*c2-b2*c1,a2*c1-a1*c2,a1*b2-b1*a2
-    d=(-a*x1-b*y1-c*z1)
-    return np.array([a,b,c,d])
-
-def getOrderPerEpiline(coord1,coord2,nMarkers,F):
+# ordering approach using epiline proximity
+def getOrderPerEpiline(coord1,coord2,nMarkers,F,verbose = 0,retValue = 0):
     # get data
     pts1,pts2,orderSecondFrame = np.copy(coord1).reshape(-1,2),np.copy(coord2).reshape(-1,2),np.ones(nMarkers,dtype=np.int8)*-1
     epilines = np.zeros((nMarkers,3))
@@ -315,14 +325,14 @@ def getOrderPerEpiline(coord1,coord2,nMarkers,F):
         allDists.append(dist)
     # get minimum distance
     minDist = min(allDists)
-    # get all idx with 1 pixels distance from the mininum distance combination
+    # get all indexes with 1 pixels distance from the mininum distance combination
     choosenIdx = allPermuationsOf4[np.where(allDists<=minDist+1)[0]]
-    # id there are more than 1 combination possible, find ambiguous blobs
+    # if there are more than 1 combination possible, find ambiguous blobs
     if len(choosenIdx)>1:
         # initiate variables
         allCombinationsOf2 = np.array(list(combinations(list(range(0,len(choosenIdx))),2)))
         mask = np.ones(nMarkers,dtype=np.bool)
-        # get common idx from all ambiguous combinations
+        # get common indexes from all ambiguous combinations
         for idx in allCombinationsOf2:
             nowMask = np.equal(choosenIdx[idx[0]],choosenIdx[idx[1]])
             mask*=nowMask
@@ -342,6 +352,125 @@ def getOrderPerEpiline(coord1,coord2,nMarkers,F):
         orderSecondFrame = choosenIdx[0]
         orderSecondFrame[idx1.astype(int)] = idx2.astype(int)
     else: orderSecondFrame = choosenIdx[0]
+    
+    if not retValue: return orderSecondFrame
+    if retValue: return orderSecondFrame,minDist<20
 
-    return orderSecondFrame
+# find the rotation and translation between dataframes
+# source: http://nghiaho.com/?page_id=671
+def findRandT(ptA,ptB,nMarkers):
+    centroidA,centroidB=np.sum(ptA,axis=1).reshape(-1,1)/nMarkers,np.sum(ptB,axis=1).reshape(-1,1)/nMarkers
+    H = np.matmul(ptA-centroidA,(ptB-centroidB).T)
+    [U,S,V] = mySVD(H)
+    R = np.matmul(V,U.T)
+    t = centroidB-np.matmul(R,centroidA)
+    return R,t.reshape(-1,1)
+
+# order blobs per proximity
+def getTheClosest(coordNow, prev):
+    # get data into the correct shape
+    centerCoord,prevCenterCoord = np.copy(coordNow).reshape(-1,2),np.copy(prev).reshape(-1,2)
+    newOrder,nMarkers = np.ones(centerCoord.shape[0],dtype=np.int8)*-1,centerCoord.shape[0]
+    # order each blob
+    for i in range(nMarkers):
+        # check if blob has already been ordered
+        if newOrder[i] == -1:
+            # get distance from previous images blobs to actual image
+            pt = prevCenterCoord[i]        
+            distNow = np.linalg.norm(centerCoord-pt,axis=1)
+            retNow = distNow < 5
+            # if any blob is closer than 5 px, that is the one
+            if np.sum(retNow) == 1: newOrder[i] = np.argmin(distNow)
+            else:              
+                # if more than 1 one or 0 are close than 5px, get the one with the smaller distance
+                allPermuationsOf4,allDists = np.array(list(permutations(list(range(0,4))))),[]
+                # get all possible distances between last and actual iamges blobs
+                for idx in allPermuationsOf4:
+                    newPts,dist = centerCoord[idx],0
+                    for k in range(nMarkers): 
+                        aux= np.linalg.norm(prevCenterCoord[k]-newPts[k])
+                        dist+=aux
+                    allDists.append(dist)
+                # get minimum distance
+                minDist = np.argmin(allDists)
+                choosenIdx = allPermuationsOf4[minDist]
+                return choosenIdx
+    return newOrder
+
+# interpolate data using cubic spline
+def myInterpolate(coord,ts,step):
+    # get data
+    if not len(ts): return [],[]
+    # get array limits
+    lowBound,highBound = math.ceil(ts[0]/step),math.floor(ts[-1]/step)
+    # interpolate
+    tNew = np.linspace(lowBound,highBound,int((highBound-lowBound))+1,dtype=np.uint16)
+    ff = CubicSpline(ts,coord,axis=0)
+    return ff(tNew*step),tNew
+
+# returns if neighbor camera has captured a point at that timestamp
+def getOtherValidIdx(line,nMarkers,idx,relateLast2First = 0):
+    nCameras = int(line.shape[0]/2/nMarkers)
+    nColumns = 2*nMarkers
+    valid = [np.any(line[i*nColumns:i*nColumns+nColumns]) for i in [(idx-1)%nCameras,(idx+1)%nCameras]]
+    res = np.array([(idx-1)%nCameras,(idx+1)%nCameras])[np.where(valid)[0]]
+    if not relateLast2First and nCameras!=2: 
+        if idx == 0: res = np.delete(res,np.where(res == (nCameras-1))[0])
+        elif idx == (nCameras-1): res = np.delete(res,np.where(res == 0)[0])
+    return res
+
+# create dictionary that keeps track of ordering need with neighbor camera
+def createNeedsOrder(nCameras,relateLast2First = 0):
+    needsOrder = {}
+    for i in range(nCameras):
+        # if the last camera is calibrated as a pair to the first one
+        if relateLast2First:
+            if not i: needsOrder[str(i)]=np.array([nCameras-1,i+1])
+            elif i == (nCameras-1): needsOrder[str(i)]=np.array([i-1,0])
+            else: needsOrder[str(i)]=np.array([i-1,i+1])
+        else:
+            if not i: needsOrder[str(i)]=np.array([i+1])
+            elif i == (nCameras-1): needsOrder[str(i)]=np.array([i-1])
+            else: needsOrder[str(i)]=np.array([i-1,i+1])
+    return needsOrder
+
+# resets the ordering array at one camera index
+def activateNeedsOrder(nCameras, idx, needsOrder, relateLast2First = 0):
+    if not idx:
+        # add the vector to the camera at idx
+        if relateLast2First: 
+            needsOrder[str(idx)]=np.array([nCameras-1,idx+1])
+            needsOrder[str(nCameras-1)]=np.unique(np.hstack((needsOrder[str(nCameras-1)],[0])))
+        else: needsOrder[str(idx)]=np.array([idx+1])
+        # add to the neighbor camera that idx needs ordering
+        needsOrder[str(idx+1)]=np.unique(np.hstack((needsOrder[str(idx+1)],[idx])))
+    elif idx == (nCameras-1):
+        if relateLast2First: 
+            needsOrder[str(idx)]=np.array([idx-1,0])
+            needsOrder[str(0)]=np.unique(np.hstack((needsOrder[0],[nCameras-1])))
+        else: needsOrder[str(idx)]=np.array([idx-1])
+        needsOrder[str(idx-1)]=np.unique(np.hstack((needsOrder[str(idx-1)],[idx])))
+    else:
+        needsOrder[str(idx)]=np.array([idx-1,idx+1])
+        needsOrder[str(idx+1)]=np.unique(np.hstack((needsOrder[str(idx+1)],[idx])))
+        needsOrder[str(idx-1)]=np.unique(np.hstack((needsOrder[str(idx-1)],[idx])))
+    return needsOrder
+
+# removes indexes from neighbor camera (they have been ordered)
+def popNeedsOrder(idx, otherIdx, needsOrder):
+    # delete from idx
+    myVec = np.array(needsOrder[str(idx)])
+    idx2Delete = np.where(myVec==otherIdx)[0]
+    needsOrder[str(idx)] = np.delete(myVec,idx2Delete)
+    # delete from otherIdx
+    myVec = np.array(needsOrder[str(otherIdx)])
+    idx2Delete = np.where(myVec==idx)[0]
+    needsOrder[str(otherIdx)] = np.delete(myVec,idx2Delete)
+    return needsOrder
+
+# get angle between two vectors
+def getAngle(a,b):
+    cosPhi = np.dot(a,b)/(np.linalg.norm(a)*np.linalg.norm(b))
+    phi = np.arccos(cosPhi)
+    return np.arctan2(np.sin(phi),cosPhi)
 

@@ -3,8 +3,8 @@ import warnings
 warnings.filterwarnings("ignore")
 import socket,time,argparse
 import numpy as np
-from cv2 import destroyAllWindows,triangulatePoints,computeCorrespondEpilines
-from myLib import myProjectionPoints,processCentroids,isEqual4,getOrderPerEpiline,findPlane,drawlines
+from cv2 import destroyAllWindows,triangulatePoints
+from myLib import myProjectionPoints,processCentroids,getOrderPerEpiline,findPlane
 from constants import cameraMat,distCoef
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -115,13 +115,13 @@ class myServer(object):
                     msg = message[0:sizeMsg-4].reshape(-1,3)
                     coord = msg[:,0:2]
                     # store message parameters
-                    a,b,time,imgNumber = message[-4],message[-3],message[-2],int(message[-1]) 
+                    a,b,timeNow,imgNumber = message[-4],message[-3],message[-2],int(message[-1]) 
                     if not len(coord): continue
                     # undistort points
                     undCoord = processCentroids(coord,a,b,self.cameraMat[idx],distCoef[idx])
                     if undCoord.shape[0]==3:
-                        if self.save: dfSave.append(np.concatenate((undCoord.reshape(undCoord.shape[0]*undCoord.shape[1]),[time,imgNumber,idx])))
-                        if not counter[idx]: dfOrig[idx] = np.hstack((undCoord.reshape(6),time))
+                        if self.save: dfSave.append(np.concatenate((undCoord.reshape(undCoord.shape[0]*undCoord.shape[1]),[timeNow,imgNumber,idx])))
+                        if not counter[idx]: dfOrig[idx] = np.hstack((undCoord.reshape(6),timeNow))
                         counter[idx]+=1
                     # do I have enough points?     
                     if np.all(counter>0): break                            
@@ -130,38 +130,33 @@ class myServer(object):
             self.server_socket.close()
             destroyAllWindows()
             # save results
-            if self.save: np.savetxt('camGround.csv', np.array(dfSave), delimiter=',')
+            if self.save: np.savetxt('data/camGround.csv', np.array(dfSave), delimiter=',')
             # import R,T and lambda
-            rotation = np.genfromtxt('R.csv', delimiter=',').reshape(-1,3,3)
-            translation= np.genfromtxt('t.csv', delimiter=',').reshape(-1,1,3)
-            scale,FMatrices = np.genfromtxt('lamb.csv', delimiter=','), np.genfromtxt('F.csv', delimiter=',').reshape(-1,3,3)
-            # get matrices
-            if rotation.shape[0]==2: R,t,lamb,F = rotation[1],translation[1],scale[1],FMatrices.reshape(3,3)
-            else: R,t,lamb,F = rotation[1],translation[1],scale[1],FMatrices[0]
-            # select points
-            pts1,pts2 = dfOrig[0][0:6].reshape(-1,2),dfOrig[1][0:6].reshape(-1,2)
-            orderSecondFrame = getOrderPerEpiline(pts1,pts2,3,np.copy(F))
-            pts2 = np.copy(pts2[orderSecondFrame])
-            pts1,pts2 = np.int32(pts1),np.int32(pts2)
-            # plot epipolar lines
-            '''img1,img2 = np.ones((720,960))*255,np.ones((720,960))*255
-            lines1 = computeCorrespondEpilines(pts2.reshape(-1,1,2), 2,F)
-            lines1 = lines1.reshape(-1,3)
-            img5,_ = drawlines(img1,img2,lines1,pts1,pts2)
-            lines2 = computeCorrespondEpilines(pts1.reshape(-1,1,2), 1,F)
-            lines2 = lines2.reshape(-1,3)
-            img3,_ = drawlines(img2,img1,lines2,pts2,pts1)
-            plt.figure(figsize=(20, 16),dpi=100)
-            plt.subplot(121),plt.imshow(img5)
-            plt.subplot(122),plt.imshow(img3)
-            plt.show()'''
-            # triangulate ordered centroids
+            rotation = np.genfromtxt('data/R.csv', delimiter=',').reshape(-1,3,3)
+            translation = np.genfromtxt('data/t.csv', delimiter=',').reshape(-1,1,3)
+            projMat = np.genfromtxt('data/projMat.csv', delimiter=',').reshape(-1,4,4)
+            scale,FMatrix = np.genfromtxt('data/lamb.csv', delimiter=','), np.genfromtxt('data/F.csv', delimiter=',').reshape(-1,3,3)
+            # order centroids
+            for j in range(self.numberCameras-1):
+                # collect extrinsics from calibration between camera 0 and 1
+                F = FMatrix[j]
+                R,t,lamb = rotation[j+1],translation[j+1].reshape(-1,3),scale[j+1]
+                # order centroids per epipolar line
+                pts1,pts2 = dfOrig[j][0:6].reshape(-1,2),dfOrig[j+1][0:6].reshape(-1,2)
+                orderSecondFrame = getOrderPerEpiline(pts1,pts2,3,np.copy(F))
+                pts2 = np.copy(pts2[orderSecondFrame])
+                # save dataset
+                dfOrig[j+1][0:6] = pts2.copy().ravel()
+            # triangulate ordered centroids from the first pair
+            pts1,pts2 = np.copy(dfOrig[0][0:6].reshape(-1,2)),np.copy(dfOrig[1][0:6].reshape(-1,2))
+            R,t,lamb = rotation[1],translation[1].reshape(-1,3),scale[1]
             P1,P2 = np.hstack((cameraMat[0], [[0.], [0.], [0.]])),np.matmul(cameraMat[1], np.hstack((R, t.T)))
             projPt1,projPt2 = myProjectionPoints(np.array(pts1)),myProjectionPoints(np.array(pts2))
             points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
             points3d = (points4d[:3, :]/points4d[3, :]).T
             if points3d[0, 2] < 0: points3d = -points3d
             points3d = points3d*lamb/100
+
             # get ground plane coefficients
             plane = findPlane(points3d[0],points3d[1],points3d[2])
             if np.any(plane[0:3]<0): plane = findPlane(points3d[0],points3d[2],points3d[1])
@@ -171,22 +166,22 @@ class myServer(object):
             # compute the angle between the plane and the y axis
             cosPhi = np.dot(v,k)/(np.linalg.norm(v)*np.linalg.norm(k))
             # compute the versors
-            [u1,u2,_] = np.cross(v,k)/np.linalg.norm(np.cross(v,k))
+            [u1,u2,u3] = np.cross(v,k)/np.linalg.norm(np.cross(v,k))
             # get the rotation matrix and new ground plane coefficients
             sinPhi = np.sqrt(1-pow(cosPhi,2))
             R_plane = np.array([
-                    [cosPhi+u1*u1*(1-cosPhi),u1*u2*(1-cosPhi),u2*sinPhi],
-                    [u1*u2*(1-cosPhi),cosPhi+u2*u2*(1-cosPhi),-u1*sinPhi],
-                    [-u2*sinPhi,u1*sinPhi,cosPhi]])
-            [A,B,C] = np.matmul(np.array([a,b,c]),R_plane.T)
+                    [cosPhi+u1*u1*(1-cosPhi),u1*u2*(1-cosPhi)-u3*sinPhi,u2*sinPhi+u1*u3*(1-cosPhi)],
+                    [u1*u2*(1-cosPhi)+u3*sinPhi,cosPhi+u2*u2*(1-cosPhi),u2*u3*(1-cosPhi)-u1*sinPhi],
+                    [u1*u3*(1-cosPhi)-u2*sinPhi,u2*u3*(1-cosPhi)+u1*sinPhi,cosPhi+u3*u3*(1-cosPhi)]])
+            [A,B,C] = np.matmul(R_plane,np.array([a,b,c]).T)
             newPlane = np.array([A,B,C])
-            
+
             # setting 3D plot variables
             fig = plt.figure(figsize=(8, 8),dpi=100)
             ax = plt.axes(projection='3d')
-            ax.set_xlim(-1, 7)
+            ax.set_xlim(-1, 4)
             ax.set_zlim(-6, 0)
-            ax.set_ylim(-1, 7)
+            ax.set_ylim(-1, 4)
             ax.set_xlabel('X')
             ax.set_ylabel('Z')
             ax.set_zlabel('Y')
@@ -198,36 +193,36 @@ class myServer(object):
             plt.gca().invert_zaxis()
             ax.get_proj = lambda: np.dot(Axes3D.get_proj(ax), np.diag([1., 1., .5, 1.]))
             colours = [['fuchsia','plum'],['darkorange','gold'],['limegreen','greenyellow'],['blue','lightsteelblue']]
+
             # initializing arrays
             zDisplacement = 0
             P_plane = np.vstack((np.hstack((R_plane,np.array([0,0,0]).reshape(3,-1))),np.hstack((np.zeros((3)),1))))
+
             # plot each camera translated and rotated to meet the ground plane
             for j in range(self.numberCameras):
-                # initialize initial values of the projection matrices                
-                P_new = np.vstack((np.hstack((np.identity(3),np.zeros((3,1)))),np.hstack((np.zeros((3)),1))))
-                # iterate over the previous cameras to find the relation to the 0th camera
-                # e.g. 3 -> 2 -> 1 -> 0
-                for i in np.flip(range(j+1)):
-                    t,R,lamb = np.array(translation[i][0]).reshape(-1,3),np.array(rotation[i]),scale[i]
-                    t_new = np.matmul(-t, R).reshape(-1,3)*lamb/100
-                    P = np.vstack((np.hstack((R.T,t_new.T)),np.hstack((np.zeros((3)),1))))
-                    P_new = np.matmul(P,P_new)
-                o = np.matmul(P_new,[[0.],[0],[0.],[1]]).ravel()
+                o = np.matmul(projMat[j],[[0.],[0],[0.],[1]]).ravel()
                 o+= [0,+d/b,0,0]
                 o = np.matmul(P_plane,o).ravel()
                 if not j: zDisplacement = o[2]
                 o+= [0,0,-zDisplacement,0]
                 x,y,z= np.array([1, 0, 0, 0]), np.array([0, 1, 0, 0]),np.array([0, 0, 1, 0])
-                x,y,z = np.matmul(P_new,x),np.matmul(P_new,y),np.matmul(P_new,z)
+                x,y,z = np.matmul(projMat[j],x),np.matmul(projMat[j],y),np.matmul(projMat[j],z)
                 x,y,z = np.matmul(P_plane,x),np.matmul(P_plane,y),np.matmul(P_plane,z)
                 ax.quiver(o[0], o[2], o[1], x[0], x[2], x[1], arrow_length_ratio=0.1, edgecolors="r", label='X axis')
                 ax.quiver(o[0], o[2], o[1], y[0], y[2], y[1], arrow_length_ratio=0.1, edgecolors="b", label='Y axis')
                 ax.quiver(o[0], o[2], o[1], z[0], z[2], z[1], arrow_length_ratio=0.1, edgecolors="g", label='Z axis')
-                ax.scatter(o[0], o[2], o[1], s=50, edgecolor=colours[j][0], facecolor=colours[j][1], linewidth=2,  label = 'Camera '+str(j))                
+                ax.scatter(o[0], o[2], o[1], s=50, edgecolor=colours[j][0], facecolor=colours[j][1], linewidth=2,  label = 'Camera '+str(j))
+            
+            # save data
+            np.savetxt('data/P_plane.csv', np.array(P_plane), delimiter=',')
+            np.savetxt('data/groundData.csv', np.array([d,b,zDisplacement]), delimiter=',')
+                
             # plot the ground plane
             x,z = np.linspace(-1,1,30),np.linspace(3,5,10)
             X,Z = np.meshgrid(x,z)
             Y=(-newPlane[0]*X -newPlane[2]*Z)/newPlane[1]
+            print('[RESULTS] Maximum Y:',max(np.array(Y).ravel()))
+            print('[RESULTS] Minimum Y:',min(np.array(Y).ravel()))
             surf = ax.plot_surface(X,Z-zDisplacement,Y,color='b',alpha=.15,label="Wand's plane")
             surf._facecolors2d = surf._facecolor3d
             surf._edgecolors2d = surf._edgecolor3d
@@ -238,15 +233,14 @@ class myServer(object):
             points3d+= [0,0,-zDisplacement,0]
             points3d = points3d.T
             ax.scatter(points3d[0], points3d[2], points3d[1], s=50, c=points3d[2], cmap=cmhot, label= 'Markers')
+
             # axis setup and plot variables
+            first3Dpoints = points3d.copy()
             handles, labels = plt.gca().get_legend_handles_labels()
             by_label = dict(zip(labels, handles))
-            plt.legend(by_label.values(), by_label.keys(),ncol=3,loc ='center',edgecolor='silver', bbox_to_anchor=(0.5, 0.8))            
-            # saving csv
-            np.savetxt('groundCalibData.csv', np.hstack(([zDisplacement,d/b],R_plane.ravel())), delimiter=',')
+            plt.legend(by_label.values(), by_label.keys(),ncol=3,loc ='center',edgecolor='silver', bbox_to_anchor=(0.5, 0.8))
             plt.draw()
             plt.show()
- 
             
 # parser for command line
 parser = argparse.ArgumentParser(description='''Server for the MoCap system at the Erobotica lab of UFCG.
