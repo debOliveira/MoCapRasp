@@ -1,5 +1,5 @@
 <p align="center">
-<img src="https://user-images.githubusercontent.com/48807586/177659981-d0c4ffe2-3738-45ec-886e-c289925b0546.png" height="300" align="center">
+<img src="https://user-images.githubusercontent.com/48807586/177659981-d0c4ffe2-3738-45ec-886e-c289925b0546.png" height="200" align="center">
 </p>
 
 ![Status](https://img.shields.io/static/v1?style=flat&logo=github&label=status&message=on%20going&color=blue) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)  
