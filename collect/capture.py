@@ -42,8 +42,9 @@ GPIO.output(led,1)
 
 # server parameters
 print('[INFO] connecting to server')
+hostnamePC = socket.gethostbyname('debora-pc.local')
 UDPSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-UDPSocket.sendto(str(str(w)+','+str(h)+','+str(md)).encode(),("192.168.0.104", 8888))
+UDPSocket.sendto(str(str(w)+','+str(h)+','+str(md)).encode(),(hostnamePC, 8888))
 message,_ = UDPSocket.recvfrom(1024)
 start = float(message.split()[0])
 max_frames = int(message.split()[1])*fps
