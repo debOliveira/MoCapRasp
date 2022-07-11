@@ -46,6 +46,12 @@ distCoef_cam1 = np.array([[0.395621],
 ```
 and add all matrices to the array `cameraMat` and `distCoef`.
 
+- Make sure mDNS is activated in your network and change the hostname of each Raspberry at the line 
+```python
+ip = (socket.gethostbyname('cam1.local')+','+socket.gethostbyname('cam2.local')+','+
+      socket.gethostbyname('cam3.local')+','+socket.gethostbyname('cam4.local'))
+```
+at `serverv2Calib.py`, `serverv2Ground.py` and `serverv2Test.py`. Ensure that the sequence is from camera 1 to N. 
 
 ## Usage
 
@@ -60,7 +66,7 @@ python3 serverv2Test.py --help
 
 Here are some examples that I use per default
 ``` python
-python3 serverv2Calib.py  -n 4 -trig 20 -rec 120 -save -ip 192.168.0.105,192.168.0.100,192.168.0.101,192.168.0.103
-python3 serverv2Ground.py -n 4 -trig 2  -rec 10  -save -ip 192.168.0.105,192.168.0.100,192.168.0.101,192.168.0.103
-python3 serverv2Test.py   -n 4 -trig 5  -rec 60  -save -ip 192.168.0.105,192.168.0.100,192.168.0.101,192.168.0.103
+python3 serverv2Calib.py  -trig 20 -rec 120 -save 
+python3 serverv2Ground.py -trig 2  -rec 10  -save 
+python3 serverv2Test.py   -trig 5  -rec 60  -save 
 ```
