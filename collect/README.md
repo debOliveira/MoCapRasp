@@ -43,10 +43,12 @@ source start.sh
 ``` bash
 source test.sh
 ```
-- Change the IP of your server in  `capture.py`
-``` python
-UDPSocket.sendto(str(str(w)+','+str(h)+','+str(md)).encode(),("192.168.0.104", 8888))
-```
+- Check the image using **VNC server** 
+>    * Activate VNC in `sudo raspi-config` > Interface
+>    * Install **VNC viewer** in your Dektop and add a new connection with your Rasp IP
+>    * Uncomment `hdmi-hot-plug` in `boot/config.txt` if using a Rasp 4
+>    * Activate direct capture under **VNC server** > Options
+>    * If you receive a warning to unsupported privilege, run `sudo vncpasswd -service`
 - Adjust the blob detectors parameters in `watch.py` to the size of your blob
 >    1) Change propertires of `params` in `watch.py`
 >    1) Comment the lines 44 to 53 in `capture.py`and uncomment line 54
@@ -64,4 +66,3 @@ source run.sh
 ```
 3) Press <kbd>Ctrl+C</kbd> when capture is finished to avoid waiting for the timeout
 > You can change the timeout waiting in line 85 of `watch.py` (default: 300 seconds)
-
