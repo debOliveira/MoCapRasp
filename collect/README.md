@@ -26,6 +26,7 @@ This folder stores the code of the **MoCap server side**.
 - Install requirements
 ``` shell 
 sudo apt-get install ptpd
+sudo apt-get install -y libatlas-base-dev libhdf5-dev libhdf5-serial-dev libjasper-dev
 pip3 install -r requirements.txt
 ```
 
