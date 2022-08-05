@@ -28,6 +28,7 @@ Change the values of the resolution of the image and the [sensor mode](https://p
 picamera.PiCamera(resolution=(960,640), framerate=20, sensor_mode=2)
 ```
 - Prefer bigger resolutions and modes with full sensor capture
+- Use PNG over compressed image types (JPG, bitmap)
 - In the motion capture, you can use any resolution or sensor size below the value you setted at the intrinsic calibration
 
 ### Framerate
