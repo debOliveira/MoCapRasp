@@ -25,7 +25,7 @@ mkdir pics
 
 Change the values of the resolution of the image and the [sensor mode](https://picamera.readthedocs.io/en/release-1.13/fov.html#sensor-modes) at 
 ```python
-picamera.PiCamera(resolution=(640,480), framerate=20, sensor_mode=2)
+picamera.PiCamera(resolution=(960,640), framerate=20, sensor_mode=2)
 ```
 - Prefer bigger resolutions and modes with full sensor capture
 - In the motion capture, you can use any resolution or sensor size below the value you setted at the intrinsic calibration
