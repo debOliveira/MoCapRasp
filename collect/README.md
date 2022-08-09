@@ -67,3 +67,12 @@ source run.sh
 ```
 3) Press <kbd>Ctrl+C</kbd> when capture is finished to avoid waiting for the timeout
 > You can change the timeout waiting in line 85 of `watch.py` (default: 300 seconds)
+
+## Turn off
+
+Run the line
+```
+sudo shutdown -h now
+```
+and disconnect all power plugs.
+
