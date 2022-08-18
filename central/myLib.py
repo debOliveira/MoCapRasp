@@ -358,13 +358,26 @@ def getOrderPerEpiline(coord1,coord2,nMarkers,F,verbose = 0,retValue = 0):
 
 # find the rotation and translation between dataframes
 # source: http://nghiaho.com/?page_id=671
-def findRandT(ptA,ptB,nMarkers):
+def findRandT(ptA,ptB):
+    nMarkers = min(ptA.shape[1],ptB.shape[1])
     centroidA,centroidB=np.sum(ptA,axis=1).reshape(-1,1)/nMarkers,np.sum(ptB,axis=1).reshape(-1,1)/nMarkers
     H = np.matmul(ptA-centroidA,(ptB-centroidB).T)
-    [U,S,V] = mySVD(H)
-    R = np.matmul(V,U.T)
+    [U,_,V] = mySVD(H)
+    R = np.matmul(V,U.T)    
+    if np.linalg.det(R)<0: 
+        V[:,-1] = -V[:,-1]
+        R = np.matmul(V,U.T)
     t = centroidB-np.matmul(R,centroidA)
     return R,t.reshape(-1,1)
+
+def findOtherCamera(whichCamera,nCameras):
+    if not len(whichCamera): return []
+    cam1,cam2 = int(whichCamera[0])-1,int(whichCamera[1])-1
+    otherCam = []
+    for i in range(nCameras):
+        if i != cam1 and i != cam2: otherCam.append(i)
+    return otherCam
+
 
 # order blobs per proximity
 def getTheClosest(coordNow, prev):
