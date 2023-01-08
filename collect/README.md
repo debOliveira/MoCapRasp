@@ -17,8 +17,7 @@ This folder stores the code of the **MoCap client side**.
     |
     ├── requirements.txt    # python requirements
     |
-    └── raspividyuv         # .ipynb to debug the .csv offline
-
+    └── raspividyuv         # modified command to call camera wrapper
 
 
 ## Requirements
