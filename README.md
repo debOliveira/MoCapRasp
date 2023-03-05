@@ -8,7 +8,7 @@
 This repository stores an **open optical tracking/motion capture system using passive reflective markers and Raspberry Pi**. 
 
 > - This work is an result of my master dissertation titled ["Heterogeneous optical tracking system for mobile vehicles"](https://drive.google.com/file/d/1Gvj34tuTL8okl7SSPtr6r7JbKLNrIH3P/view?usp=sharing). 
-> - An article titled "Optical tracking system based on COTS components" is also *in prelo* at the [IPAS 2022](https://ipas.ieee.tn/). 
+> - An article titled ["Optical tracking system based on COTS components"](https://ieeexplore.ieee.org/document/10053039) is also at the IPAS 2022. 
 
 ## Usage
 
