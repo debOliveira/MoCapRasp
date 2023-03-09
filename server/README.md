@@ -4,17 +4,14 @@ This folder stores the code of the **MoCap server side**.
 
 ## Organization
 
-    ├── /old                # codes for other experiments phases. 
-    |                       # check the paper to understand the different phases.
-    |
-    ├── serverv2Calib.py    # runs the real-time extrinsics calibration
-    ├── serverv2Test.py     # runs the real-time ground calibration
-    ├── serverv2Ground.py   # runs the real-time MoCap capture   
+    ├── calib.py            # runs the real-time extrinsics calibration
+    ├── ground.py           # runs the real-time ground calibration
+    ├── capture.py          # runs the real-time MoCap capture   
     |
     ├── myLib.py            # function lib
     ├── constants.py        # where you will put the intrisics matrices
     |
-    ├── start.sh            # start the ptp server
+    ├── connect.sh          # start the ptp server
     |
     ├── requirements.txt    # python requirements
     |
@@ -33,9 +30,9 @@ pip3 install -r requirements.txt
 
 - Start the `ptpd` server
 ``` bash
-source start.sh
+source connect.sh
 ```
-- Copy the matrices of the intrinsics cali  bration done in [`./calib`](/calib/) to `constants.py` in the format:
+- Copy the matrices of the intrinsics calibration done in [`./calib`](/calib/) to `constants.py` in the format:
 ``` python
 cameraMatrix_cam1 = np.array([[720.313,0,481.014],
                               [0,719.521,360.991],
@@ -52,7 +49,7 @@ and add all matrices to the array `cameraMat` and `distCoef`.
 ip = (socket.gethostbyname('cam1.local')+','+socket.gethostbyname('cam2.local')+','+
       socket.gethostbyname('cam3.local')+','+socket.gethostbyname('cam4.local'))
 ```
-at `serverv2Calib.py`, `serverv2Ground.py` and `serverv2Test.py`. Ensure that the sequence is from camera 1 to N. 
+at `calib.py`, `ground.py` and `capture.py`. Ensure that the sequence is from camera 1 to N. 
 
 ## Usage
 
@@ -60,14 +57,14 @@ at `serverv2Calib.py`, `serverv2Ground.py` and `serverv2Test.py`. Ensure that th
 
 You can find the arguments of each script running 
 ``` python
-python3 serverv2Calib.py --help
-python3 serverv2Ground.py --help
-python3 serverv2Test.py --help
+python3 calib.py --help
+python3 ground.py --help
+python3 capture.py --help
 ```
 
 Here are some examples that I use per default
 ``` python
-python3 serverv2Calib.py  -trig 20 -rec 120 -save 
-python3 serverv2Ground.py -trig 2  -rec 10  -save 
-python3 serverv2Test.py   -trig 5  -rec 60  -save 
+python3 calib.py   -trig 20 -rec 120 -save 
+python3 ground.py  -trig 2  -rec 10  -save 
+python3 capture.py -trig 5  -rec 60  -save 
 ```

@@ -117,12 +117,12 @@ class myServer(object):
         dfTriang = np.zeros((int(self.recTime/self.step),4*4+1))
         dfTriang[:,-1] = np.arange(0,self.recTime,self.step)
         # import R,T and lambda
-        rotation = np.genfromtxt('data/R.csv', delimiter=',').reshape(-1,3,3)
-        translation = np.genfromtxt('data/t.csv', delimiter=',').reshape(-1,1,3)
-        projMat = np.genfromtxt('data/projMat.csv', delimiter=',').reshape(-1,4,4)
-        scale,FMatrix = np.genfromtxt('data/lamb.csv', delimiter=','), np.genfromtxt('data/F.csv', delimiter=',').reshape(-1,3,3)
-        P_plane = np.genfromtxt('data/P_plane.csv', delimiter=',').reshape(-1,4)
-        [d,b,zDisplacement] = np.genfromtxt('data/groundData.csv', delimiter=',').reshape(3)
+        rotation = np.genfromtxt('collect/R.csv', delimiter=',').reshape(-1,3,3)
+        translation = np.genfromtxt('collect/t.csv', delimiter=',').reshape(-1,1,3)
+        projMat = np.genfromtxt('collect/projMat.csv', delimiter=',').reshape(-1,4,4)
+        scale,FMatrix = np.genfromtxt('collect/lamb.csv', delimiter=','), np.genfromtxt('collect/F.csv', delimiter=',').reshape(-1,3,3)
+        P_plane = np.genfromtxt('collect/P_plane.csv', delimiter=',').reshape(-1,4)
+        [d,b,zDisplacement] = np.genfromtxt('collect/groundData.csv', delimiter=',').reshape(3)
         # capture loop
         try:
             while np.any(capture):
@@ -276,7 +276,7 @@ class myServer(object):
             self.server_socket.close()
             destroyAllWindows()
             # save results
-            if self.save: np.savetxt('data/camTest.csv', np.array(dfSave), delimiter=',')
+            if self.save: np.savetxt('collect/camTest.csv', np.array(dfSave), delimiter=',')
             # just comprising dataset if wanted to plot
             emptyLines = np.unique([i for i in range(0,dfInterp.shape[0]) if not dfInterp[i][-1]])
             dfInterp = np.delete(dfInterp,emptyLines,axis=0)

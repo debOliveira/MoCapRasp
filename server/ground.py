@@ -131,12 +131,12 @@ class myServer(object):
             self.server_socket.close()
             destroyAllWindows()
             # save results
-            if self.save: np.savetxt('data/camGround.csv', np.array(dfSave), delimiter=',')
+            if self.save: np.savetxt('collect/camGround.csv', np.array(dfSave), delimiter=',')
             # import R,T and lambda
-            rotation = np.genfromtxt('data/R.csv', delimiter=',').reshape(-1,3,3)
-            translation = np.genfromtxt('data/t.csv', delimiter=',').reshape(-1,1,3)
-            projMat = np.genfromtxt('data/projMat.csv', delimiter=',').reshape(-1,4,4)
-            scale,FMatrix = np.genfromtxt('data/lamb.csv', delimiter=','), np.genfromtxt('data/F.csv', delimiter=',').reshape(-1,3,3)
+            rotation = np.genfromtxt('collect/R.csv', delimiter=',').reshape(-1,3,3)
+            translation = np.genfromtxt('collect/t.csv', delimiter=',').reshape(-1,1,3)
+            projMat = np.genfromtxt('collect/projMat.csv', delimiter=',').reshape(-1,4,4)
+            scale,FMatrix = np.genfromtxt('collect/lamb.csv', delimiter=','), np.genfromtxt('collect/F.csv', delimiter=',').reshape(-1,3,3)
             # order centroids
             for j in range(self.numberCameras-1):
                 # collect extrinsics from calibration between camera 0 and 1
@@ -215,8 +215,8 @@ class myServer(object):
                 ax.scatter(o[0], o[2], o[1], s=50, edgecolor=colours[j][0], facecolor=colours[j][1], linewidth=2,  label = 'Camera '+str(j))
             
             # save data
-            np.savetxt('data/P_plane.csv', np.array(P_plane), delimiter=',')
-            np.savetxt('data/groundData.csv', np.array([d,b,zDisplacement]), delimiter=',')
+            np.savetxt('collect/P_plane.csv', np.array(P_plane), delimiter=',')
+            np.savetxt('collect/groundData.csv', np.array([d,b,zDisplacement]), delimiter=',')
                 
             # plot the ground plane
             x,z = np.linspace(-1,1,30),np.linspace(3,5,10)
