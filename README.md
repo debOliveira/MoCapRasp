@@ -17,8 +17,8 @@ Each folder has its own `README.md` guide file. Please read each one and adjust 
 ## Organisation
     
 - [`./calib`](/calib/) stores the code to collect the images used in intrinsics calibration. 
-- [`./central`](/central/) has the codes of the server side.
-- [`./collect`](/collect/) comprises the files used in the clients. 
+- [`./server`](/server/) has the codes of the server side.
+- [`./client`](/client/) has the codes of the server side and comprises the files used in the clients. 
 
 ## Materials
 
@@ -65,7 +65,7 @@ Each folder has its own `README.md` guide file. Please read each one and adjust 
     
 ### Server
 
-Read the instructions at [`./central`](/central/)
+Read the instructions at [`./server`](/server/)
 
 ### Clients
 
@@ -73,7 +73,7 @@ Read the instructions at [`./central`](/central/)
     > The system has a 1cm accuracy when using 4 cameras, but the number can be expanded to improve cover.
 - Put a cooler over each RPi. 
     > The high FPS will heat to 80C and activate frequency capping if no ventilation is directly over the processor.
-- Read the instructions at [`./collect`](/collect/)
+- Read the instructions at [`./client`](/client/)
 
 **Here are some pictures from my clients** <p align="center">
 <img src="https://user-images.githubusercontent.com/48807586/177630783-b98d915a-e8e6-4619-8d5b-ff4ae7bf9cec.png" height="300" align="center">

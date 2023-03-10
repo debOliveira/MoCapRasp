@@ -4,16 +4,13 @@ This folder stores the code of the **MoCap client side**.
 
 ## Organization
 
-    ├── /old                # codes for other experiments phases. 
-    |                       # check the paper to understand the different phases.
-    |
     ├── LED.py              # turns on IR ring if connected to GPIO
-    ├── capture.py          # captures the images thread
+    ├── record.py           # record the images thread
     ├── watch.py            # processing image thread  
     |
     ├── run.sh              # bash to run capture
     ├── test.sh             # bash to test the camera image
-    ├── start.sh            # start the ptp server
+    ├── connect.sh          # start the ptp server
     |
     ├── requirements.txt    # python requirements
     |
@@ -36,7 +33,7 @@ systemctl disable systemd-timesyncd.service
 
 - Start the `ptpd` server
 ``` bash
-source start.sh
+source connect.sh
 ```
 - Connect a jumper to the GPIO 4 if you want the RPi to trigger the LED
 - Test if the camera stream can be opened
@@ -51,15 +48,15 @@ source test.sh
 >    * If you receive a warning to unsupported privilege, run `sudo vncpasswd -service`
 - Adjust the blob detectors parameters in `watch.py` to the size of your blob
 >    1) Change propertires of `params` in `watch.py`
->    1) Comment the lines 44 to 53 in `capture.py`and uncomment line 54
->    2) Uncomment the lines 59 to 66 in `watch.py`
+>    1) Comment the lines 45 to 54 in `record.py`and uncomment line 55
+>    2) Uncomment the lines 61 to 67 in `watch.py`
 >    3) Run `source run.sh` to view the captured blob and centroids
 >    4) Repeat steps 1 to 3 until all blobs are detected
 
 
 ## Usage
 
-1) Run the `serverv2Calib.py`, `serverv2Calib.py` or `serverv2Calib.py`
+1) Run the `calib.py`, `ground.py` or `capture.py` in central
 2) Source run code
 ``` bash
 source run.sh
