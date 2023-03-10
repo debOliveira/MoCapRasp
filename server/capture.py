@@ -206,7 +206,7 @@ class myServer(object):
                                         F = FMatrix[minIdx]
                                         interpolateIdx1,interpolateIdx2 = np.argmax(np.in1d(tNew1, tNew2)),np.argmax(np.in1d(tNew2, tNew1))
                                         # order per epipolar line
-                                        if idx < otherIdx: orderSecondFrame,ret otherIdx= getOrderPerEpiline(interp1[-1],interp2[-1],4,F,0,1)
+                                        if idx < otherIdx: orderSecondFrame,ret = getOrderPerEpiline(interp1[-1],interp2[-1],4,F,0,1)
                                         else: orderSecondFrame,ret = getOrderPerEpiline(interp2[-1],interp1[-1],4,F,0,1)
                                         if not ret: 
                                             if self.verbose: print(minIdx,maxIdx,'could not rearange at',tNew2[-1]*self.step,'s')
