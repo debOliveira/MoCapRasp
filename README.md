@@ -18,7 +18,7 @@ Each folder has its own `README.md` guide file. Please read each one and adjust 
     
 - [`./calib`](/calib/) stores the code to collect the images used in intrinsics calibration. 
 - [`./server`](/server/) has the codes of the server side.
-- [`./client`](/client/) has the codes of the client side and comprises the files used in the clients. 
+- [`./client`](/client/) has the codes of the server side and comprises the files used in the clients. 
 
 ## Materials
 
