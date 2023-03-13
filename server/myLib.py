@@ -5,6 +5,7 @@ from itertools import permutations,combinations
 from cv2 import COLOR_GRAY2RGB,cvtColor,line,circle,FONT_HERSHEY_SIMPLEX,putText
 import math
 from scipy.interpolate import CubicSpline
+from scipy.spatial.distance import pdist
 
 def isCollinear(p0, p1, p2):
     X,y = [[p0[0]],[p1[0]],[p2[0]]],[p0[1], p1[1], p2[1]]      
@@ -16,10 +17,23 @@ def isCollinear(p0, p1, p2):
     res = (m < 1)
     return res
 
+def occlusion(pt, tol=5):
+    if len(pt) > 1:
+        return min(pdist(pt, metric='euclidean')) < tol
+    else:
+        return False
+
 def isEqual(pt,tol=5):
     A,B,C = pt[0],pt[1],pt[2]
     AB,AC,BC = np.linalg.norm(A-B),np.linalg.norm(A-C),np.linalg.norm(C-B)
     return min(AB,AC,BC)<tol
+
+# check if there is occlusion
+def isEqual4(pt,tol=5):
+    A,B,C,D = pt[0],pt[1],pt[2],pt[3]
+    AB,AC,BC = np.linalg.norm(A-B),np.linalg.norm(A-C),np.linalg.norm(C-B)
+    AD,BD,CD = np.linalg.norm(A-D),np.linalg.norm(B-D),np.linalg.norm(C-D)
+    return min(AB,AC,BC,AD,BD,CD)<tol
 
 def getPreviousCentroid(noPrevious, lastCentroid):
     if not noPrevious: return []
@@ -258,13 +272,6 @@ def processCentroids(coord,a0,b0,cameraMatrix,distCoef):
     undCoord = myUndistortPointsFisheye(undCoord,cameraMatrix,distCoef)  
     return undCoord
 
-# check if there is occlusion
-def isEqual4(pt,tol=5):
-    A,B,C,D = pt[0],pt[1],pt[2],pt[3]
-    AB,AC,BC = np.linalg.norm(A-B),np.linalg.norm(A-C),np.linalg.norm(C-B)
-    AD,BD,CD = np.linalg.norm(A-D),np.linalg.norm(B-D),np.linalg.norm(C-D)
-    return min(AB,AC,BC,AD,BD,CD)<tol
-
 # get epiline coeficients based on the fundamental matrix
 def getEpilineCoef(pts,F):
     [a,b,c]=np.matmul(F,np.hstack((pts,1))) #ax+by+c=0
@@ -486,4 +493,3 @@ def getAngle(a,b):
     cosPhi = np.dot(a,b)/(np.linalg.norm(a)*np.linalg.norm(b))
     phi = np.arccos(cosPhi)
     return np.arctan2(np.sin(phi),cosPhi)
-
