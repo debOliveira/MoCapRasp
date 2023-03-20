@@ -19,6 +19,13 @@ This folder stores the code of the **MoCap client side**.
 
 ## Requirements
 
+- When installing the [Raspbian OS](https://www.raspbian.org/), change the hostname to 'camX', for 'X' the number of the camera
+
+- Acess the Raspberry remotely (e.g. for camera 1)
+``` shell 
+ssh pi@cam1.local
+``` 
+
 - Install requirements
 ``` shell 
 sudo apt-get install ptpd
