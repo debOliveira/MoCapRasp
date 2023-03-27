@@ -4,16 +4,15 @@ This folder stores the code of the **MoCap server side**.
 
 ## Organization
 
-    ├── calib.py            # runs the real-time extrinsics calibration
-    ├── ground.py           # runs the real-time ground calibration
-    ├── capture.py          # runs the real-time MoCap capture   
+    ├── requirements.txt    # Python requirements
     |
-    ├── myLib.py            # function lib
-    ├── constants.py        # where you will put the intrisics matrices
+    ├── mcr                 # Custom MoCap Rasp module package 
     |
-    ├── connect.sh          # start the ptp server
+    ├── connect.sh          # Start the ptpd server
     |
-    ├── requirements.txt    # python requirements
+    ├── calib.py            # Runs the real-time extrinsics calibration
+    ├── ground.py           # Runs the real-time ground calibration
+    ├── capture.py          # Runs the real-time MoCap capture   
     |
     └── debugOnline.ipynb   # .ipynb to debug the .csv offline
 
@@ -32,7 +31,7 @@ pip3 install -r requirements.txt
 ``` bash
 source connect.sh
 ```
-- Copy the matrices of the intrinsics calibration done in [`./calib`](/calib/) to `constants.py` in the format:
+- Copy the matrices of the intrinsics calibration done in [`./calib`](/calib/) to `mcr/constants.py` in the format:
 ``` python
 cameraMatrix_cam1 = np.array([[720.313,0,481.014],
                               [0,719.521,360.991],
