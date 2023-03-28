@@ -3,38 +3,57 @@ import warnings
 warnings.filterwarnings("ignore")
 import socket,time,math,argparse
 import numpy as np
-from constants import cameraMat,distCoef
-from cv2 import destroyAllWindows,triangulatePoints
-from myLib import myProjectionPoints,occlusion,processCentroids,createNeedsOrder,activateNeedsOrder,getTheClosest,myInterpolate,getOrderPerEpiline,popNeedsOrder,getOtherValidIdx
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from scipy.interpolate import CubicSpline
+from cv2 import destroyAllWindows,triangulatePoints
 
-class myServer(object):
+from mcr.math import interpolate
+from mcr.cameras import projectionPoints, getOtherValidIdx
+from mcr.markers import occlusion, processCentroids, getOrderPerEpiline, createNeedsOrder, activateNeedsOrder, getTheClosest, getOrderPerEpiline, popNeedsOrder
+from mcr.plot import plotArena
+from mcr.constants import cameraMat, distCoef
+
+class mcrServer(object):
+    # Experimental
+    __slots__ = [ "nMarkers", "triggerTime", "recTime", "step", "verbose", "save", "ipList", "nCameras", "cameraMat", "distCoef", "nImages", "imageSize", "bufferSize", "server_socket" ]
+
     def __init__(self,nMarkers,triggerTime,recTime,FPS,verbose,save,ipList):
         # VARIABLES >>> DO NOT CHANGE <<<
-        self.nMarkers,self.triggerTime,self.recTime,self.step,self.save,self.verbose,self.ipList = nMarkers,triggerTime,recTime,1/FPS,save,verbose,np.array(ipList.split(','))
-        self.numberCameras = self.ipList.shape[0]
+        self.nMarkers = nMarkers
+        self.triggerTime = triggerTime
+        self.recTime = recTime
+        self.step = 1 / FPS
+        self.verbose = verbose
+        self.save = save
+        self.ipList = np.array(ipList.split(','))
+        self.nCameras = self.ipList.shape[0]
 
         # Check number of IPs
-        if self.ipList.shape[0]!=self.numberCameras:
+        if self.ipList.shape[0] != self.nCameras:
             print('[ERROR] Number of cameras do not match the number of IPs given')
             exit()
 
-        self.cameraMat,self.distCoef = np.copy(cameraMat),np.copy(distCoef)
+        self.cameraMat = np.copy(cameraMat)
+        self.distCoef = np.copy(distCoef)
 
         # Do not change below this line, socket variables
-        self.nImages,self.imageSize = int(self.recTime/self.step),[]
-        for _ in range(self.numberCameras): self.imageSize.append([])
-        print('[INFO] creating server')
-        self.bufferSize,self.server_socket = 1024,socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-        self.server_socket.bind(('0.0.0.0',8888))
+        self.nImages = int(self.recTime / self.step)
+        self.imageSize = []
         
+        for _ in range(self.nCameras): 
+            self.imageSize.append([])
+        
+        print('[INFO] creating server')
+
+        self.bufferSize = 1024
+
+        self.server_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM) 
+        self.server_socket.bind(('0.0.0.0',8888))
+
     # Connects with clients
     def connect(self):
         print("[INFO] server running, waiting for clients")
         addedCams,ports,k=[],[],0
-        while k != self.numberCameras:
+        while k != self.nCameras:
             # Collect adresses
             message,address = self.server_socket.recvfrom(self.bufferSize)
 
@@ -50,7 +69,7 @@ class myServer(object):
             print('[INFO] camera '+str(idx)+' connected at '+str(address[0]))
 
             # Redo intrinsics
-            ret,newCamMatrix=self.myIntrinsics(self.cameraMat[idx],self.imageSize[idx][0],self.imageSize[idx][1],self.imageSize[idx][2])
+            ret,newCamMatrix=self.mcrIntrinsics(self.cameraMat[idx],self.imageSize[idx][0],self.imageSize[idx][1],self.imageSize[idx][2])
             if ret: self.cameraMat[idx]=np.copy(newCamMatrix)
             else: exit()
             k+=1
@@ -60,13 +79,13 @@ class myServer(object):
         # Send trigger
         print('[INFO] all clients connected')
         self.triggerTime += time.time()
-        for i in range(self.numberCameras): self.server_socket.sendto((str(self.triggerTime)+' '+str(self.recTime)).encode(),tuple(ports[i]))
+        for i in range(self.nCameras): self.server_socket.sendto((str(self.triggerTime)+' '+str(self.recTime)).encode(),tuple(ports[i]))
         print('[INFO] trigger sent')
 
     # New intrinsics
-    def myIntrinsics(self,origMatrix,w,h,mode):
+    def mcrIntrinsics(self,origMatrix,w,h,mode):
         camIntris = np.copy(origMatrix) # Copy to avoid registrer error
-        
+
         # Check if image is at the vailable proportion
         if w/h==4/3 or w/h==16/9:
             if mode==4: # Only resize
@@ -111,22 +130,24 @@ class myServer(object):
     def collect(self):
         # Internal variables
         print('[INFO] waiting capture')
-        capture = np.ones(self.numberCameras,dtype=np.bool)
-        counter,lastTime,lastImgNumber = np.zeros(self.numberCameras,dtype=np.int32),np.zeros(self.numberCameras,dtype=np.int32),np.zeros(self.numberCameras,dtype=np.int32)
-        missed,invalid,swap = np.zeros(self.numberCameras,dtype=np.int32),np.zeros(self.numberCameras,dtype=np.int32),np.zeros(self.numberCameras,dtype=np.int32)
+        capture = np.ones(self.nCameras,dtype=np.bool)
+        counter,lastTime,lastImgNumber = np.zeros(self.nCameras,dtype=np.int32),np.zeros(self.nCameras,dtype=np.int32),np.zeros(self.nCameras,dtype=np.int32)
+
+        missed = np.zeros(self.nCameras,dtype=np.int32)
+        invalid = np.zeros(self.nCameras,dtype=np.int32)
         dfSave,dfOrig,points3d,intervals,lastTnew ,allPoints3d= [],[],[],[],[],[]
 
         nPrevious,warmUp = 3,10 # Warm up > nPrevious
 
-        needsOrder = createNeedsOrder(self.numberCameras,relateLast2First=0)
+        needsOrder = createNeedsOrder(self.nCameras,relateLast2First=0)
 
-        for _ in range(self.numberCameras): # For each camera
+        for _ in range(self.nCameras): # For each camera
             intervals.append([]) # List for each camera
             lastTnew.append([]) # List for each camera
             dfOrig.append([]) # List for each camera
 
         # Each PTS will have a 2D marker coordinate for each camera + 2 additional columns
-        dfInterp = np.zeros((self.nImages,self.numberCameras*(2*self.nMarkers)+2)) # Last two columns are special
+        dfInterp = np.zeros((self.nImages,self.nCameras*(2*self.nMarkers)+2)) # Last two columns are special
 
         dfInterp[:,-2] = np.arange(0,self.recTime,self.step) # Penultimate column is filled with the time stamps
         dfInterp[:,-1] = np.zeros_like(dfInterp[:,-1],dtype=np.bool8) # Last column is filled with bool zeros (false)
@@ -141,7 +162,7 @@ class myServer(object):
         projMat = np.genfromtxt('data/projMat.csv', delimiter=',').reshape(-1,4,4)
         scale,FMatrix = np.genfromtxt('data/lamb.csv', delimiter=','), np.genfromtxt('data/F.csv', delimiter=',').reshape(-1,3,3)
         P_plane = np.genfromtxt('data/P_plane.csv', delimiter=',').reshape(-1,4)
-        [d,b,zDisplacement] = np.genfromtxt('data/groundData.csv', delimiter=',').reshape(3)
+        [d,b,h] = np.genfromtxt('data/groundData.csv', delimiter=',').reshape(3)
 
         # Capture loop
         try:
@@ -191,7 +212,8 @@ class myServer(object):
                         if not occlusion(undCoord,5) and not np.any(undCoord < 0): 
                             if invalid[idx] >= 10 or not counter[idx]: 
                                 if self.verbose: print('reseting at camera', idx,', counter',counter[idx],',',timeNow/1e6,'s')
-                                prev,needsOrder = [],activateNeedsOrder(self.numberCameras,idx,needsOrder,relateLast2First=0)
+                                prev = []
+                                needsOrder = activateNeedsOrder(self.nCameras,idx,needsOrder,relateLast2First=0)
                                 intervals[idx].append(counter[idx])
                             else:
                                 if not (counter[idx]-1): prev = np.array(dfOrig[idx][0:(2*self.nMarkers)]).reshape(-1,2) 
@@ -218,20 +240,28 @@ class myServer(object):
                                 myCounter,myIntervals = np.array([counter[idx],counter[otherIdx]]),np.array([intervals[idx][-1],intervals[otherIdx][-1]])            
                                 if np.all(myCounter-myIntervals>=nPrevious):
                                     # See if there are intersection between arrays
-                                    ts1,ts2 = dfOrig[idx][intervals[idx][-1]:counter[idx],(2*self.nMarkers)]/1e6,dfOrig[otherIdx][intervals[otherIdx][-1]:counter[otherIdx],(2*self.nMarkers)]/1e6 
-                                    validIdx1 = [k for k in range(0,len(ts1)) if max(ts1[0], ts2[0])-0.01<=ts1[k]<=min(ts1[-1], ts2[-1])+0.01]
-                                    validIdx2 = [k for k in range(0,len(ts2)) if max(ts1[0], ts2[0])-0.01<=ts2[k]<=min(ts1[-1], ts2[-1])+0.01]
+                                    ts1 = dfOrig[idx][intervals[idx][-1]:counter[idx],(2 * self.nMarkers)] / 1e6
+                                    ts2 = dfOrig[otherIdx][intervals[otherIdx][-1]:counter[otherIdx],(2 * self.nMarkers)] / 1e6 
+
+                                    maxFirstIntersection = max(ts1[0], ts2[0])
+                                    minLastIntersection = min(ts1[-1], ts2[-1])
+                                    
+                                    validIdx1 = [k for k in range(0, len(ts1)) if maxFirstIntersection - 0.01 <= ts1[k] <= minLastIntersection + 0.01]
+                                    validIdx2 = [k for k in range(0, len(ts2)) if maxFirstIntersection - 0.01 <= ts2[k] <= minLastIntersection + 0.01]
                                     
                                     # If there is intersection, get order
                                     if len(validIdx1) and len(validIdx2):
+
                                         ts1,ts2 = np.copy(ts1[validIdx1]),np.copy(ts2[validIdx2])
-                                        if ts1.shape[0]<2 or ts2.shape[0]<2: continue
+
+                                        if ts1.shape[0] < 2 or ts2.shape[0] < 2: continue
+
                                         coord1,coord2 = dfOrig[idx][intervals[idx][-1]:counter[idx],0:(2*self.nMarkers)],dfOrig[otherIdx][intervals[otherIdx][-1]:counter[otherIdx],0:(2*self.nMarkers)] 
                                         coord1,coord2 = np.copy(coord1[validIdx1]),np.copy(coord2[validIdx2])
                                         
                                         # Get interpolated data
-                                        interp1,tNew1 = myInterpolate(coord1,ts1,self.step)
-                                        interp2,tNew2 = myInterpolate(coord2,ts2,self.step)
+                                        interp1,tNew1 = interpolate(coord1,ts1,self.step)
+                                        interp2,tNew2 = interpolate(coord2,ts2,self.step)
                                         if not len(interp1) or not len(interp2): continue
                                         
                                         # Get min and max idx
@@ -239,7 +269,6 @@ class myServer(object):
 
                                         # Get common idx
                                         F = FMatrix[minIdx]
-                                        interpolateIdx1,interpolateIdx2 = np.argmax(np.in1d(tNew1, tNew2)),np.argmax(np.in1d(tNew2, tNew1))
                                         
                                         # Order per epipolar line
                                         if idx < otherIdx: orderSecondFrame,ret = getOrderPerEpiline(interp1[-1],interp2[-1],self.nMarkers,F,0,1) 
@@ -256,9 +285,9 @@ class myServer(object):
                                             dfOrig[maxIdx][k,0:(2*self.nMarkers)] = np.copy(dfOrig[maxIdx][k,0:(2*self.nMarkers)].reshape(-1,2)[orderSecondFrame].reshape(-(2*self.nMarkers))) 
                                         
                                         # Change ordering boolean
-                                        needsOrder=popNeedsOrder(idx,otherIdx,needsOrder)
-                                        for k in range(maxIdx+1,self.numberCameras):
-                                            needsOrder=activateNeedsOrder(self.numberCameras,k,needsOrder,relateLast2First=0) 
+                                        needsOrder = popNeedsOrder(idx, otherIdx, needsOrder)
+                                        for k in range(maxIdx+1,self.nCameras):
+                                            needsOrder = activateNeedsOrder(self.nCameras,k,needsOrder,relateLast2First=0) 
 
                         if (counter[idx]-intervals[idx][-1])>=warmUp: 
                             # Get data to interpolate
@@ -294,7 +323,7 @@ class myServer(object):
                                 pts1,pts2 = dfInterp[k,minIdx*(2*self.nMarkers):(minIdx+1)*(2*self.nMarkers)].reshape(-1,2),dfInterp[k,maxIdx*(2*self.nMarkers):(maxIdx+1)*(2*self.nMarkers)].reshape(-1,2) 
                                 R,t,lamb = rotation[maxIdx],translation[maxIdx].reshape(-1,3),scale[maxIdx]
                                 P1,P2 = np.hstack((cameraMat[minIdx], [[0.], [0.], [0.]])),np.matmul(cameraMat[maxIdx], np.hstack((R, t.T)))
-                                projPt1,projPt2 = myProjectionPoints(np.array(pts1)),myProjectionPoints(np.array(pts2))
+                                projPt1,projPt2 = projectionPoints(np.array(pts1)),projectionPoints(np.array(pts2))
                                 
                                 # Triangulate
                                 points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
@@ -304,17 +333,18 @@ class myServer(object):
                                 # Project in scale regarding the minimum index camera
                                 points3d = np.hstack((points3d*lamb/100,np.ones((points3d.shape[0],1)))).T
                                 points3d = np.matmul(projMat[minIdx],points3d).T
-                                
-                                # Rotate to ground plane
-                                points3d+= [0,d/b,0,0]
+
+                                # Translate and Rotate to ground plane
+                                points3d += [0,d/b,0,0]
                                 points3d = np.matmul(P_plane,points3d.T).T
-                                points3d+= [0,0,-zDisplacement,0]
+                                points3d += [0,0,-h,0]
                                 
                                 # Save to array
                                 dfTriang[k,0:(4*self.nMarkers)] = np.copy(points3d.ravel()) 
                                 if not len(allPoints3d):
                                     allPoints3d = np.copy(points3d)
-                                else: allPoints3d = np.vstack((allPoints3d,points3d)) 
+                                else: 
+                                    allPoints3d = np.vstack((allPoints3d,points3d)) 
                                             
         finally:        
             # Close everything
@@ -322,7 +352,8 @@ class myServer(object):
             destroyAllWindows()
             
             # Save results
-            if self.save: np.savetxt('data/camTest.csv', np.array(dfSave), delimiter=',')
+            if self.save: 
+                np.savetxt('data/camTest.csv', np.array(dfSave), delimiter=',')
             
             # Just comprising dataset if wanted to plot
             emptyLines = np.unique([i for i in range(0,dfInterp.shape[0]) if not dfInterp[i][-1]])
@@ -330,48 +361,19 @@ class myServer(object):
             dfTriang = np.delete(dfTriang,emptyLines,axis=0)
             print('[INFO] found ' +str(dfTriang.shape[0])+ ' interpolated pics')
             allPoints3d = np.array(allPoints3d).T
-            
-            # Setting 3D plot variables
-            fig = plt.figure(figsize=(8, 8),dpi=100)
-            ax = plt.axes(projection='3d')
-            ax.set_xlim(-1, 4)
-            ax.set_zlim(-6, 0)
-            ax.set_ylim(-1, 4)
-            ax.set_xlabel('X')
-            ax.set_ylabel('Z')
-            ax.set_zlabel('Y')
-            ax.set_xlabel('X', fontweight='bold',labelpad=15)
-            ax.set_ylabel('Z', fontweight='bold',labelpad=15)
-            ax.set_zlabel('Y', fontweight='bold',labelpad=5)
-            cmhot = plt.get_cmap("jet")
-            ax.view_init(elev=30, azim=-50) 
-            plt.gca().invert_zaxis()
-            ax.get_proj = lambda: np.dot(Axes3D.get_proj(ax), np.diag([1., 1., .5, 1.]))
-            colours = [['fuchsia','plum'],['darkorange','gold'],['limegreen','greenyellow'],['blue','lightsteelblue']]
 
-            # Plot each camera translated and rotated to meet the ground plane
-            for j in range(self.numberCameras):
-                o = np.matmul(projMat[j],[[0.],[0],[0.],[1]]).ravel()
-                o+= [0,+d/b,0,0]
-                o = np.matmul(P_plane,o).ravel()
-                o+= [0,0,-zDisplacement,0]
-                x,y,z= np.array([1, 0, 0, 0]), np.array([0, 1, 0, 0]),np.array([0, 0, 1, 0])
-                x,y,z = np.matmul(projMat[j],x),np.matmul(projMat[j],y),np.matmul(projMat[j],z)
-                x,y,z = np.matmul(P_plane,x),np.matmul(P_plane,y),np.matmul(P_plane,z)
-                ax.quiver(o[0], o[2], o[1], x[0], x[2], x[1], arrow_length_ratio=0.1, edgecolors="r", label='X axis')
-                ax.quiver(o[0], o[2], o[1], y[0], y[2], y[1], arrow_length_ratio=0.1, edgecolors="b", label='Y axis')
-                ax.quiver(o[0], o[2], o[1], z[0], z[2], z[1], arrow_length_ratio=0.1, edgecolors="g", label='Z axis')
-                ax.scatter(o[0], o[2], o[1], s=50, edgecolor=colours[j][0], facecolor=colours[j][1], linewidth=2,  label = 'Camera '+str(j))
+            # Prepare data for plotting
+            groundData = {'planeDisplacement': d/b, 
+                        'planeRotation': P_plane}
 
-            # Plot points after correction matrix
-            ax.scatter(allPoints3d[0], allPoints3d[2], allPoints3d[1], s=50, c=allPoints3d[2], cmap=cmhot, label= 'Markers')
+            cameraData = {'cameraHeight': h,
+                        'projectionMatrices': projMat}
 
-            # Axis setup and plot variables
-            handles, labels = plt.gca().get_legend_handles_labels()
-            by_label = dict(zip(labels, handles))
-            plt.legend(by_label.values(), by_label.keys(),ncol=3,loc ='center',edgecolor='silver', bbox_to_anchor=(0.5, 0.8))
-            plt.draw()
-            plt.show()
+            # Plotting
+            plotArena(title='Capture Plot Analysis', 
+                      allPoints3d=allPoints3d, 
+                      cameraData=cameraData, 
+                      groundData=groundData)
             
             
 # Parser for command line
@@ -388,6 +390,7 @@ args = parser.parse_args()
 ip = (socket.gethostbyname('cam1.local')+','+socket.gethostbyname('cam2.local')+','+
       socket.gethostbyname('cam3.local')+','+socket.gethostbyname('cam4.local'))
 
-myServer_ = myServer(args.marker, args.trig, args.rec, args.fps, args.verbose, args.save, ip)
-myServer_.connect()
-myServer_.collect()
+mcrServer_ = mcrServer(args.marker, args.trig, args.rec, args.fps, args.verbose, args.save, ip)
+
+mcrServer_.connect()
+mcrServer_.collect()
