@@ -63,7 +63,7 @@ python3 capture.py --help
 
 Here are some examples that I use per default
 ``` python
-python3 calib.py   -trig 20 -rec 120 -save 
-python3 ground.py  -trig 2  -rec 10  -save 
-python3 capture.py -marker 4 -trig 5  -rec 60  -save 
+python3 calib.py -trig 20 -rec 120 -save 
+python3 ground.py -trig 2 -rec 10 -save 
+python3 capture.py -marker 4 -rec 60 -save -trig 5  
 ```
