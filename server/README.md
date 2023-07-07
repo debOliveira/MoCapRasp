@@ -40,7 +40,7 @@ at `calib.py`, `ground.py` and `capture.py`. Ensure that the sequence is from ca
 
 ## ⚔️ Usage
 
->  **FIRST TIME USERS**: understand `debugOnline.ipynb` before trying to change the real-time python scripts.
+>  **FIRST-TIME USERS**: understand `debugOnline.ipynb` before changing the real-time python scripts.
 
 You can find the arguments of each script running 
 ``` python
@@ -49,9 +49,15 @@ python3 ground.py --help
 python3 capture.py --help
 ```
 
-Here are some examples that I use per default
+Per default: 
 ``` python
 python3 calib.py -trig 20 -rec 120 -save 
 python3 ground.py -trig 2 -rec 10 -save 
 python3 capture.py -marker 4 -rec 60 -save -trig 5  
 ```
+### 🖼️ Example pics
+
+<p align="center">
+<img src="https://user-images.githubusercontent.com/48807586/177630567-203f1129-dc2e-4f36-b9f5-4dd15c5e4c1d.png" height="300" align="center">
+<img src="https://user-images.githubusercontent.com/48807586/177630590-ecf808d8-98f1-44f5-a3be-9fbb3b7a658d.png" height="300" align="center"><br><br>
+</p>
