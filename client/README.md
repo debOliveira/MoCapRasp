@@ -1,15 +1,15 @@
 # Client
 
-This folder stores the code of the **MoCap client side**. We used RaspPi 4b 16GB RAM with Raspbian 32 bits. 
+We used RaspPi 4b 16GB RAM with Raspbian 32 bits. 
 
-## Organization
+## 📂 Organization
 
     ├── LED.py              # turns on IR ring if connected to GPIO
-    ├── record.py           # record the images thread
+    ├── record.py           # record thread
     ├── watch.py            # processing image thread  
     |
     ├── run.sh              # bash to run capture
-    ├── test.sh             # bash to test the camera image
+    ├── test.sh             # bash to test the camera stream
     ├── connect.sh          # start the ptp server
     |
     ├── requirements.txt    # python requirements
@@ -17,11 +17,11 @@ This folder stores the code of the **MoCap client side**. We used RaspPi 4b 16GB
     └── raspividyuv         # modified command to call camera wrapper
 
 
-## Requirements
+## 🏗️ Requirements
 
 - When installing the [Raspbian OS](https://www.raspbian.org/), change the hostname to `camX`, for `X` the number of the camera
 
-- Access the Raspberry remotely (e.g. for camera 1)
+- Access the Pi remotely (e.g. for camera 1)
 ``` shell 
 ssh pi@cam1.local
 ``` 
@@ -61,21 +61,16 @@ source test.sh
 >    4) Repeat steps 1 to 3 until all blobs are detected
 
 
-## Usage
+## ⚔️ Usage
 
-1) Run the `calib.py`, `ground.py` or `capture.py` in central
-2) Source run code
-``` bash
-source run.sh
-```
+1) Run the `calib.py`, `ground.py` or `capture.py` in the server
+2) `source run.sh`
 3) Press <kbd>Ctrl+C</kbd> when capture is finished to avoid waiting for the timeout
 > You can change the timeout waiting in line 85 of `watch.py` (default: 300 seconds)
 
-## Turn off
-
-Run the line
-```
-sudo shutdown -h now
-```
-and disconnect all power plugs.
+## 🖼️ Example pics
+<p align="center">
+<img src="https://user-images.githubusercontent.com/48807586/177630783-b98d915a-e8e6-4619-8d5b-ff4ae7bf9cec.png" height="300" align="center">
+<img src="https://user-images.githubusercontent.com/48807586/177630812-ef0bdeef-2afe-4c6c-b8f9-d032e451bc46.png" height="300" align="center">
+</p>
 
