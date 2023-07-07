@@ -1,6 +1,6 @@
 # Client
 
-This folder stores the code of the **MoCap client side**.
+This folder stores the code of the **MoCap client side**. We used RaspPi 4b 16GB RAM with Raspbian 32 bits. 
 
 ## Organization
 
