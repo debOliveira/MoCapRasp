@@ -1,24 +1,22 @@
 # Server
 
-This folder stores the code of the **MoCap server side**.
+## 📂 Organization
 
-## Organization
-
-    ├── requirements.txt    # Python requirements
+    ├── requirements.txt    # python requirements
     |
-    ├── mcr                 # Custom MoCap Rasp module package 
+    ├── mcr                 # MoCapRasp module package 
     |
-    ├── connect.sh          # Start the ptpd server
+    ├── connect.sh          # start the ptpd server
     |
-    ├── calib.py            # Runs the real-time extrinsics calibration
-    ├── ground.py           # Runs the real-time ground calibration
-    ├── capture.py          # Runs the real-time MoCap capture   
+    ├── calib.py            # runs the real-time extrinsics calibration
+    ├── ground.py           # runs the real-time ground calibration
+    ├── capture.py          # runs the real-time capture   
     |
     └── debugOnline.ipynb   # .ipynb to debug the .csv offline
 
 
 
-## Requirements
+## 🏗️ Requirements
 
 - Install requirements
 ``` shell 
@@ -31,17 +29,7 @@ pip3 install -r requirements.txt
 ``` bash
 source connect.sh
 ```
-- Copy the matrices of the intrinsics calibration done in [`./calib`](/calib/) to `mcr/constants.py` in the format:
-``` python
-cameraMatrix_cam1 = np.array([[720.313,0,481.014],
-                              [0,719.521,360.991],
-                              [0,0,1]])
-distCoef_cam1 = np.array([[0.395621],
-                          [0.633705],
-                          [-2.41723],
-                          [2.11079]], dtype=np.float32)
-```
-and add all matrices to the array `cameraMat` and `distCoef`.
+- Copy the matrices of the intrinsics calibration done in [`./calib`](/calib/) to `mcr/constants.py` to the array `cameraMat` and `distCoef`.
 
 - Make sure mDNS is activated in your network and change the hostname of each Raspberry at the line 
 ```python
@@ -50,9 +38,9 @@ ip = (socket.gethostbyname('cam1.local')+','+socket.gethostbyname('cam2.local')+
 ```
 at `calib.py`, `ground.py` and `capture.py`. Ensure that the sequence is from camera 1 to N. 
 
-## Usage
+## ⚔️ Usage
 
->  **FIRST TIME USERS** : I recommend undestanding `debugOnline.ipynb` before trying to change the real-time python scripts.
+>  **FIRST TIME USERS**: understand `debugOnline.ipynb` before trying to change the real-time python scripts.
 
 You can find the arguments of each script running 
 ``` python
