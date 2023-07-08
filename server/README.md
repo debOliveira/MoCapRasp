@@ -55,7 +55,8 @@ python3 calib.py -trig 20 -rec 120 -save
 python3 ground.py -trig 2 -rec 10 -save 
 python3 capture.py -marker 4 -rec 60 -save -trig 5  
 ```
-### 🖼️ Example pics
+
+## 🖼️ Example pics
 
 <p align="center">
 <img src="https://user-images.githubusercontent.com/48807586/177630567-203f1129-dc2e-4f36-b9f5-4dd15c5e4c1d.png" height="300" align="center">
