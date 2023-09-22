@@ -34,4 +34,4 @@ Please follow each folder `README.md` guide file.
     
 - [`./calib`](/calib/) for intrinsics calibration 
 - [`./server`](/server/) for the server
-- [`./client`](/client/) for the client]
+- [`./client`](/client/) for the client
