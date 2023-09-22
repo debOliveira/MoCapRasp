@@ -1,51 +1,52 @@
 # Intrinsics calibration
 
-This folder stores the code for the **collection of the data** used in the **calibration of the focal distance, principal point and distortion parameters**. 
+## 🏗️ Requirements
 
-## Requirements
-
-- Make sure you [installed the `libcamera`](https://www.raspberrypi.com/documentation/accessories/camera.html#:~:text=Run%20sudo%20raspi%2Dconfig%20.,Reboot%20your%20Raspberry%20Pi%20again) using `raspi-config` :arrow_right: `interface`.
-- Check if the `picamera` lib is installed (it should be by default at the Raspbian distro).
+- Activate [`libcamera`](https://www.raspberrypi.com/documentation/accessories/camera.html#:~:text=Run%20sudo%20raspi%2Dconfig%20.,Reboot%20your%20Raspberry%20Pi%20again) via `sudo raspi-config` :arrow_right: `interface`
+- Check `picamera` library (default at the Raspbian distro)
 ``` python
 python3
 import picamera
 ```
-- Create a folder named `pics/` where you are running the code.
+- Create `pics/` folder
 ``` bash
 mkdir pics
 ```
-- Have a bright light source directly behind the camera.
-    * I use a ring light
-- Print a [calibration pattern](https://docs.opencv.org/4.x/da/d0d/tutorial_camera_calibration_pattern.html).
-    * I used a 11 X 12 with 30cm side square [[PDF here](https://github.com/debOliveira/myCameraCalibrator/tree/main/python/pdf)].
+- Have a bright light source directly behind the camera
+- Print a [calibration pattern](https://docs.opencv.org/4.x/da/d0d/tutorial_camera_calibration_pattern.html) - our has 11 X 12 with 30cm side square ([PDF](https://github.com/debOliveira/myCameraCalibrator/tree/main/python/pdf))
 
-## Setting parameters
+## 🧰 Configuration
 
 ### Resolution and sensor mode
 
-Change the values of the resolution of the image and the [sensor mode](https://picamera.readthedocs.io/en/release-1.13/fov.html#sensor-modes) at 
 ```python
-picamera.PiCamera(resolution=(960,640), framerate=20, sensor_mode=2)
+picamera.PiCamera(resolution=(960,640), framerate=20, sensor_mode=2) # line 7 in calibCapture.py
 ```
+- Refer to [sensor mode docs](https://picamera.readthedocs.io/en/release-1.13/fov.html#sensor-modes)
 - Prefer bigger resolutions and modes with full sensor capture
-- Use PNG over compressed image types (JPG, bitmap)
-- In the motion capture, you can use any resolution or sensor size below the value you setted at the intrinsic calibration
+- Use PNG over compressed types (JPG, bitmap)
 
 ### Framerate
 
-Change the FPS to the lower limit of the sensor mode you choose. Check the [table](https://picamera.readthedocs.io/en/release-1.13/fov.html#sensor-modes) here.
-
-- **If you are saving pitch black images, increasing the FPS a little may solve your issue**.
+- Change the FPS to the lower limit of the sensor mode you choose (see the [table]([url](https://picamera.readthedocs.io/en/release-1.13/fov.html#sensor-modes)) 
+- If you receive pitch-black images, increase the FPS
 
 ### Gain
 
-The image gain is set to adjust automaticaly at the first 5 seconds of the code. After that, it locks.
+- The gain is set to adjust automatically at the first 5 seconds
+- Approximate the calibration pattern in these 5 seconds so the image is very bright
 
-- **I usually approximate the calibration pattern in these 5 seconds so the image very bright**.
+## ⚔️ Usage
 
-## Usage
+- Run `python3 calibCapture.py`
+- Hit <kbd>Ctrl+C</kbd> to stop
+- Copy the images to the server (use `scp`) and run the [camera calibrator application](https://github.com/debOliveira/myCameraCalibrator)
 
-- Run the line `python3 calibCapture.py`
-- Hit <kbd>Ctrl+C</kbd> when you want the capture to stop.
-- Copy the images to the server (I used `scp`) and run the [camera calibrator application](https://github.com/debOliveira/myCameraCalibrator).
+## 🖼️ Example pics
 
+ <p align="center">
+<img src="https://user-images.githubusercontent.com/48807586/177628962-0bc55667-9e42-4df5-b561-c19c39566cfd.png" height="300" align="center">
+<img src="https://user-images.githubusercontent.com/48807586/177629909-fe780ae5-4fff-4817-a7e8-bd28ac0e00a5.png" height="300" align="center"><br><br>
+<img src="https://user-images.githubusercontent.com/48807586/177629924-51aee180-2a6a-44b6-892f-6906a22174c9.png" height="300" align="center">
+<img src="https://user-images.githubusercontent.com/48807586/177630302-cd32b6c9-6b18-49d8-9d33-7db810586d98.png" height="300" align="center">
+</p>
