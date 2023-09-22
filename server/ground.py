@@ -12,27 +12,40 @@ from mcr.plot import plotArena
 from mcr.constants import cameraMat, distCoef
 
 class mcrServer(object):
-    def __init__(self,triggerTime,recTime,FPS,verbose,save,ipList):
+    def __init__(self,nCameras,nMarkers,triggerTime,recTime,FPS,verbose,save):
         # VARIABLES >>> DO NOT CHANGE <<<
+        self.nCameras = nCameras
+        self.nMarkers = nMarkers
         self.triggerTime = triggerTime
         self.recTime = recTime
+        self.FPS = FPS
         self.step = 1 / FPS
         self.verbose = verbose
         self.save = save
-        self.ipList = np.array(ipList.split(','))
-        self.nCameras = self.ipList.shape[0]
-        
-        # Check number of IPs
-        if self.ipList.shape[0]!=self.nCameras:
-            print('[ERROR] Number of cameras do not match the number of IPs given')
+
+        self.ipList = []
+
+        # IP lookup from hostname
+        try:
+            self.ipList = [socket.gethostbyname(f'cam{ID}.local') for ID in range(nCameras)]
+        except socket.gaierror as e:
+            print('[ERROR] number of cameras do not match the number of IPs found')
             exit()
-        self.cameraMat,self.distCoef = np.copy(cameraMat),np.copy(distCoef)
+
+        self.cameraMat = np.copy(cameraMat)
+        self.distCoef = np.copy(distCoef)
 
         # Do not change below this line, socket variables
-        self.nImages,self.imageSize = int(self.recTime/self.step),[]
-        for _ in range(self.nCameras): self.imageSize.append([])
+        self.nImages = int(self.recTime / self.step)
+        self.imageSize = []
+        
+        for _ in range(self.nCameras): 
+            self.imageSize.append([])
+        
         print('[INFO] creating server')
-        self.bufferSize,self.server_socket = 1024,socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+
+        self.bufferSize = 1024
+        self.server_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM) 
         self.server_socket.bind(('0.0.0.0',8888))
 
     # Connect with clients
@@ -247,6 +260,8 @@ class mcrServer(object):
 # Parser for command line
 parser = argparse.ArgumentParser(description='''Server for the MoCap system at the Erobotica lab of UFCG.
                                                 \nPlease use it together with the corresponding client script.''',add_help=False)
+parser.add_argument('-cam',type=int,help='number of active cameras in capture (default: 4)',default=4)
+parser.add_argument('-marker',type=int,help='number of expected markers (default: 4)',default=4)
 parser.add_argument('-trig',type=int,help='trigger time in seconds (default: 10)',default=10)
 parser.add_argument('-rec',type=int,help='recording time in seconds (default: 30)',default=30)
 parser.add_argument('-fps',type=int,help='interpolation fps (default: 100FPS)',default=100)
@@ -254,9 +269,8 @@ parser.add_argument('--verbose',help='show ordering and interpolation verbosity 
 parser.add_argument('--help', action='help', default=argparse.SUPPRESS, help='show this help message and exit.')
 parser.add_argument('-save',help='save received packages to CSV (default: off)',default=False, action='store_true')
 args = parser.parse_args()
-ip = (socket.gethostbyname('cam1.local')+','+socket.gethostbyname('cam2.local')+','+
-      socket.gethostbyname('cam3.local')+','+socket.gethostbyname('cam4.local'))
 
-mcrServer_ = mcrServer(args.trig,args.rec,args.fps,args.verbose,args.save,ip)
+mcrServer_ = mcrServer(args.cam, args.marker, args.trig, args.rec, args.fps, args.verbose, args.save)
+
 mcrServer_.connect()
 mcrServer_.collect()
