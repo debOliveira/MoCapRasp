@@ -256,7 +256,6 @@ class mcrServer(object):
             np.savetxt('data/P_plane.csv', np.array(P_plane), delimiter=',')
             np.savetxt('data/groundData.csv', np.array([d,b,h]), delimiter=',')
             
-
 # Parser for command line
 parser = argparse.ArgumentParser(description='''Server for the MoCap system at the Erobotica lab of UFCG.
                                                 \nPlease use it together with the corresponding client script.''',add_help=False)

@@ -419,7 +419,6 @@ class mcrServer(object):
                       allPoints3d=allPoints3d, 
                       cameraData=cameraData)
 
-            
 # Parser for command line
 parser = argparse.ArgumentParser(description='''Server for the MoCap system at the Erobotica lab of UFCG.
                                                 \nPlease use it together with the corresponding client script.''',add_help=False)
