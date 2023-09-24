@@ -1,6 +1,6 @@
 # IMPORTS >>> DO NOT CHANGE <<<
 import warnings
-warnings.filterwarnings("ignore")
+warnings.filterwarnings('ignore')
 import socket,time,argparse
 import numpy as np
 from cv2 import destroyAllWindows,triangulatePoints
@@ -22,7 +22,6 @@ class mcrServer(object):
         self.step = 1 / FPS
         self.verbose = verbose
         self.save = save
-
         self.ipList = []
 
         # IP lookup from hostname
@@ -50,42 +49,46 @@ class mcrServer(object):
 
     # Connect with clients
     def connect(self):
-        print("[INFO] server running, waiting for clients")
-        addedCams,ports,k=[],[],0
-        while k!=self.nCameras:
+        print('[INFO] server running, waiting for clients')
+
+        addedCams,ports=[],[]
+        while len(addedCams)!=self.nCameras:
             # Collect adresses
             message,address = self.server_socket.recvfrom(self.bufferSize)
 
             # Check if it is in IP list
-            if not len(np.where(self.ipList==address[0])[0]):
+            if address[0] not in self.ipList:
                 print('[ERROR] IP '+address[0]+' not in the list')
                 exit()
 
             # Get image size
-            idx = np.where(self.ipList==address[0])[0][0]
-            if idx in addedCams: continue
-            self.imageSize[idx] = np.array(message.decode("utf-8").split(",")).astype(np.int)
+            idx = self.ipList.index(address[0])
+            self.imageSize[idx] = np.array(message.decode('utf-8').split(',')).astype(np.int)
             print('[INFO] camera '+str(idx)+' connected at '+str(address[0]))
 
             # Redo intrinsics
             ret,newCamMatrix=self.mcrIntrinsics(self.cameraMat[idx],self.imageSize[idx][0],self.imageSize[idx][1],self.imageSize[idx][2])
-            if ret: self.cameraMat[idx]=np.copy(newCamMatrix)
-            else: exit()
-            k+=1
+            if ret: 
+                self.cameraMat[idx]=np.copy(newCamMatrix)
+            else: 
+                exit()
+
             addedCams.append(idx)
             ports.append(address)
+        
+        print('[INFO] all clients connected')
 
         # Send trigger
-        print('[INFO] all clients connected')
         self.triggerTime += time.time()
-        for i in range(self.nCameras): self.server_socket.sendto((str(self.triggerTime)+' '+str(self.recTime)).encode(),tuple(ports[i]))
+        for i in range(self.nCameras): 
+            self.server_socket.sendto((str(self.triggerTime)+' '+str(self.recTime)).encode(),tuple(ports[i]))
         print('[INFO] trigger sent')
 
     # New intrinsics
     def mcrIntrinsics(self,origMatrix,w,h,mode):
-        camIntris = np.copy(origMatrix) # Copy to avoid registrer error
+        camIntris = np.copy(origMatrix) # Copy to avoid register error
         
-        # Check if image is at the vailable proportion
+        # Check if image is at the available proportion
         if w/h==4/3 or w/h==16/9:
             if mode==4: # Only resize
                 ratio = w/960
@@ -140,7 +143,7 @@ class mcrServer(object):
                 bytesPair = self.server_socket.recvfrom(self.bufferSize)
                 message = np.frombuffer(bytesPair[0],dtype=np.float64)
                 address,sizeMsg = bytesPair[1],len(message)
-                idx = np.where(self.ipList==address[0])[0][0]
+                idx = self.ipList.index(address[0])
                 if not (sizeMsg-1): capture[idx] = 0
 
                 if capture[idx]: # Check if message is valid

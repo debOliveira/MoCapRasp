@@ -1,6 +1,6 @@
 # IMPORTS >>> DO NOT CHANGE <<<
 import warnings
-warnings.filterwarnings("ignore")
+warnings.filterwarnings('ignore')
 import socket,time,math,argparse
 import numpy as np
 from scipy.interpolate import CubicSpline
@@ -23,12 +23,11 @@ class mcrServer(object):
         self.step = 1 / FPS
         self.verbose = verbose
         self.save = save
-
         self.ipList = []
 
         # IP lookup from hostname
         try:
-            self.ipList = [socket.gethostbyname(f'cam{ID}.local') for ID in range(nCameras)]
+            self.ipList = [socket.gethostbyname(f'cam{idx}.local') for idx in range(nCameras)]
         except socket.gaierror as e:
             print('[ERROR] number of cameras do not match the number of IPs found')
             exit()
@@ -51,42 +50,46 @@ class mcrServer(object):
 
     # Connect with clients
     def connect(self):
-        print("[INFO] server running, waiting for clients")
-        addedCams,ports,k=[],[],0
-        while k!=self.nCameras:
+        print('[INFO] server running, waiting for clients')
+
+        addedCams,ports=[],[]
+        while len(addedCams)!=self.nCameras:
             # Collect adresses
             message,address = self.server_socket.recvfrom(self.bufferSize)
 
             # Check if it is in IP list
-            if not len(np.where(self.ipList==address[0])[0]):
+            if address[0] not in self.ipList:
                 print('[ERROR] IP '+address[0]+' not in the list')
                 exit()
 
             # Get image size
-            idx = np.where(self.ipList==address[0])[0][0]
-            if idx in addedCams: continue
-            self.imageSize[idx] = np.array(message.decode("utf-8").split(",")).astype(np.int)
+            idx = self.ipList.index(address[0])
+            self.imageSize[idx] = np.array(message.decode('utf-8').split(',')).astype(np.int)
             print('[INFO] camera '+str(idx)+' connected at '+str(address[0]))
 
             # Redo intrinsics
             ret,newCamMatrix=self.mcrIntrinsics(self.cameraMat[idx],self.imageSize[idx][0],self.imageSize[idx][1],self.imageSize[idx][2])
-            if ret: self.cameraMat[idx]=np.copy(newCamMatrix)
-            else: exit()
-            k+=1
+            if ret: 
+                self.cameraMat[idx]=np.copy(newCamMatrix)
+            else: 
+                exit()
+
             addedCams.append(idx)
             ports.append(address)
+        
+        print('[INFO] all clients connected')
 
         # Send trigger
-        print('[INFO] all clients connected')
         self.triggerTime += time.time()
-        for i in range(self.nCameras): self.server_socket.sendto((str(self.triggerTime)+' '+str(self.recTime)).encode(),tuple(ports[i]))
+        for i in range(self.nCameras): 
+            self.server_socket.sendto((str(self.triggerTime)+' '+str(self.recTime)).encode(),tuple(ports[i]))
         print('[INFO] trigger sent')
 
     # New intrinsics
     def mcrIntrinsics(self,origMatrix,w,h,mode):
-        camIntris = np.copy(origMatrix) # Copy to avoid registrer error
+        camIntris = np.copy(origMatrix) # Copy to avoid register error
 
-        # Check if image is at the vailable proportion
+        # Check if image is at the available proportion
         if w/h==4/3 or w/h==16/9:
             if mode==4: # Only resize
                 ratio = w/960
@@ -126,7 +129,7 @@ class mcrServer(object):
 
     # Collect points from clients, order and trigger interpolation
     def collect(self):
-        # internal variables
+        # Internal variables
         print('[INFO] waiting capture')
         capture = np.ones(self.nCameras,dtype=np.bool)
         counter,lastTime = np.zeros(self.nCameras,dtype=np.uint16),np.zeros(self.nCameras,dtype=np.uint32)
@@ -148,7 +151,7 @@ class mcrServer(object):
                 bytesPair = self.server_socket.recvfrom(self.bufferSize)
                 message = np.frombuffer(bytesPair[0],dtype=np.float64)
                 address,sizeMsg = bytesPair[1],len(message)
-                idx = np.where(self.ipList==address[0])[0][0]
+                idx = self.ipList.index(address[0])
                 if not (sizeMsg-1): capture[idx] = 0
 
                 # If valid message
@@ -170,14 +173,6 @@ class mcrServer(object):
 
                         # Undistort points
                         undCoord = processCentroids(coord,a,b,self.cameraMat[idx],distCoef[idx])
-
-                        # Check if there is an obstruction between the blobs
-                        '''for [A,B,C] in undCoord.reshape([-1, 3, 2]):
-                            if np.linalg.norm(A-B)<(size[0]+size[1])/2 or np.linalg.norm(A-C)<(size[0]+size[2])/2 or np.linalg.norm(B-C)<(size[1]+size[2])/2: 
-                                if self.verbose: print('occlusion')
-                                self.missed[idx]+=1
-                                self.invalid[idx]+=1
-                                continue'''
                         
                         if self.save: dfSave.append(np.concatenate((undCoord.reshape(6),[time,imgNumber,idx])))
 
@@ -290,8 +285,8 @@ class mcrServer(object):
                         return
                     else:
                         if self.verbose:
-                            print("\nRot. Mat.\n", R.round(4))
-                            print("\nTrans. Mat.\n", t.round(4))
+                            print('\nRot. Mat.\n', R.round(4))
+                            print('\nTrans. Mat.\n', t.round(4))
                 except: 
                     print('[ERROR] no valid rotation matrix')
                     return
@@ -319,10 +314,10 @@ class mcrServer(object):
                         false_idx.extend((k,k+1,k+2))
                     k+=3
 
-                print("\tImages distant more than 1% from the real value = " + str(i)+'/'+str(int(points3d.shape[0]/3)))
+                print('\tImages distant more than 1% from the real value = ' + str(i)+'/'+str(int(points3d.shape[0]/3)))
                 
                 # Deleting points and refining estimation of the fundamental and essential matrices
-                print("[INFO] Refining fundamental matrix estimation")
+                print('[INFO] Refining fundamental matrix estimation')
                 centroids1,centroids2=np.delete(np.copy(centroids1),false_idx,axis=0),np.delete(np.copy(centroids2),false_idx,axis=0)
                 
                 # Get fundamental and essential matrices
@@ -336,8 +331,8 @@ class mcrServer(object):
                     return
                 else:
                     if self.verbose:
-                        print("\nRot. Mat.\n", R.round(4))
-                        print("\nTrans. Mat.\n", t.round(4))
+                        print('\nRot. Mat.\n', R.round(4))
+                        print('\nTrans. Mat.\n', t.round(4))
 
                 P1,P2 = np.hstack((self.cameraMat[cam], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[cam+1], np.hstack((R, t.T)))
                 projPt1,projPt2 = projectionPoints(np.copy(centroids1)),projectionPoints(np.copy(centroids2))
@@ -360,14 +355,14 @@ class mcrServer(object):
 
                 print('\tScale between real world and triang. point cloud is: ', lamb.round(2))
                 print('\tL_AC >> mean = ' + str((np.mean(L_AC_vec)*lamb).round(4)) +
-                    "cm, std. dev = " + str((np.std(L_AC_vec)*lamb).round(4)) +
-                    "cm, rms = " + str((np.sqrt(np.mean(np.square(np.array(L_AC_vec)*lamb-L_real_AC)))).round(4)) + "cm")
+                    'cm, std. dev = ' + str((np.std(L_AC_vec)*lamb).round(4)) +
+                    'cm, rms = ' + str((np.sqrt(np.mean(np.square(np.array(L_AC_vec)*lamb-L_real_AC)))).round(4)) + 'cm')
                 print('\tL_AB >> mean = ' + str((np.mean(L_AB_vec)*lamb).round(4)) +
-                    "cm, std. dev = " + str((np.std(L_AB_vec)*lamb).round(4)) +
-                    "cm, rms = " + str((np.sqrt(np.mean(np.square(np.array(L_AB_vec)*lamb-L_real_AB)))).round(4)) + "cm")
+                    'cm, std. dev = ' + str((np.std(L_AB_vec)*lamb).round(4)) +
+                    'cm, rms = ' + str((np.sqrt(np.mean(np.square(np.array(L_AB_vec)*lamb-L_real_AB)))).round(4)) + 'cm')
                 print('\tL_BC >> mean = ' + str((np.mean(L_BC_vec)*lamb).round(4)) +
-                    "cm, std. dev = " + str((np.std(L_BC_vec)*lamb).round(4)) +
-                    "cm, rms = " + str((np.sqrt(np.mean(np.square(np.array(L_BC_vec)*lamb-L_real_BC)))).round(4)) + "cm")
+                    'cm, std. dev = ' + str((np.std(L_BC_vec)*lamb).round(4)) +
+                    'cm, rms = ' + str((np.sqrt(np.mean(np.square(np.array(L_BC_vec)*lamb-L_real_BC)))).round(4)) + 'cm')
                 
                 translation.append(t)
                 rotation.append(R)
