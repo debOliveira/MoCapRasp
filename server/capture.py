@@ -13,33 +13,34 @@ from mcr.plot import plotArena
 from mcr.constants import cameraMat, distCoef
 
 class mcrServer(object):
-    def __init__(self,nCameras,nMarkers,triggerTime,recTime,FPS,verbose,save):
+    def __init__(self,cameraids, markers,trigger,record,fps,verbose,save):
         # VARIABLES >>> DO NOT CHANGE <<<
-        self.nCameras = nCameras
-        self.nMarkers = nMarkers
-        self.triggerTime = triggerTime
-        self.recTime = recTime
-        self.FPS = FPS
-        self.step = 1 / FPS
+        self.cameraids = str(cameraids).split(',')
+        self.cameras = len(self.cameraids)
+        self.markers = markers
+        self.trigger = trigger
+        self.record = record
+        self.fps = fps
+        self.step = 1 / fps
         self.verbose = verbose
         self.save = save
         self.ipList = []
 
         # IP lookup from hostname
         try:
-            self.ipList = [socket.gethostbyname(f'cam{ID}.local') for ID in range(nCameras)]
+            self.ipList = [socket.gethostbyname(f'cam{idx}.local') for idx in self.cameraids]
         except socket.gaierror as e:
-            print('[ERROR] number of cameras do not match the number of IPs found')
+            print('[ERROR] Number of cameras do not match the number of IPs found')
             exit()
 
         self.cameraMat = np.copy(cameraMat)
         self.distCoef = np.copy(distCoef)
 
         # Do not change below this line, socket variables
-        self.nImages = int(self.recTime / self.step)
+        self.nImages = int(self.record / self.step)
         self.imageSize = []
         
-        for _ in range(self.nCameras): 
+        for _ in range(self.cameras): 
             self.imageSize.append([])
         
         print('[INFO] creating server')
@@ -53,7 +54,7 @@ class mcrServer(object):
         print('[INFO] server running, waiting for clients')
 
         addedCams,ports=[],[]
-        while len(addedCams)!=self.nCameras:
+        while len(addedCams)!=self.cameras:
             # Collect adresses
             message,address = self.server_socket.recvfrom(self.bufferSize)
 
@@ -80,9 +81,9 @@ class mcrServer(object):
         print('[INFO] all clients connected')
 
         # Send trigger
-        self.triggerTime += time.time()
-        for i in range(self.nCameras): 
-            self.server_socket.sendto((str(self.triggerTime)+' '+str(self.recTime)).encode(),tuple(ports[i]))
+        self.trigger += time.time()
+        for i in range(self.cameras): 
+            self.server_socket.sendto((str(self.trigger)+' '+str(self.record)).encode(),tuple(ports[i]))
         print('[INFO] trigger sent')
 
     # New intrinsics
@@ -133,31 +134,31 @@ class mcrServer(object):
     def collect(self):
         # Internal variables
         print('[INFO] waiting capture')
-        capture = np.ones(self.nCameras,dtype=np.bool)
-        counter,lastTime,lastImgNumber = np.zeros(self.nCameras,dtype=np.int32),np.zeros(self.nCameras,dtype=np.int32),np.zeros(self.nCameras,dtype=np.int32)
+        capture = np.ones(self.cameras,dtype=np.bool)
+        counter,lastTime,lastImgNumber = np.zeros(self.cameras,dtype=np.int32),np.zeros(self.cameras,dtype=np.int32),np.zeros(self.cameras,dtype=np.int32)
 
-        missed = np.zeros(self.nCameras,dtype=np.int32)
-        invalid = np.zeros(self.nCameras,dtype=np.int32)
+        missed = np.zeros(self.cameras,dtype=np.int32)
+        invalid = np.zeros(self.cameras,dtype=np.int32)
         dfSave,dfOrig,points3d,intervals,lastTnew ,allPoints3d= [],[],[],[],[],[]
 
         nPrevious,warmUp = 3,10 # Warm up > nPrevious
 
-        needsOrder = createNeedsOrder(self.nCameras,relateLast2First=0)
+        needsOrder = createNeedsOrder(self.cameras,relateLast2First=0)
 
-        for _ in range(self.nCameras): # For each camera
+        for _ in range(self.cameras): # For each camera
             intervals.append([]) # List for each camera
             lastTnew.append([]) # List for each camera
             dfOrig.append([]) # List for each camera
 
         # Each PTS will have a 2D marker coordinate for each camera + 2 additional columns
-        dfInterp = np.zeros((self.nImages,self.nCameras*(2*self.nMarkers)+2)) # Last two columns are special
+        dfInterp = np.zeros((self.nImages,self.cameras*(2*self.markers)+2)) # Last two columns are special
 
-        dfInterp[:,-2] = np.arange(0,self.recTime,self.step) # Penultimate column is filled with the time stamps
+        dfInterp[:,-2] = np.arange(0,self.record,self.step) # Penultimate column is filled with the time stamps
         dfInterp[:,-1] = np.zeros_like(dfInterp[:,-1],dtype=np.bool8) # Last column is filled with bool zeros (false)
 
         # Each PTS will have...
-        dfTriang = np.zeros((int(self.recTime/self.step),(4*self.nMarkers)+1)) # 4D coordinates of each marker + PTS
-        dfTriang[:,-1] = np.arange(0,self.recTime,self.step) # Last column is filled with the PTSs
+        dfTriang = np.zeros((int(self.record/self.step),(4*self.markers)+1)) # 4D coordinates of each marker + PTS
+        dfTriang[:,-1] = np.arange(0,self.record,self.step) # Last column is filled with the PTSs
 
         # Import R,T and lambda
         rotation = np.genfromtxt('data/R.csv', delimiter=',').reshape(-1,3,3)
@@ -179,7 +180,7 @@ class mcrServer(object):
 
                 # If valid message
                 if capture[idx]: # Check if message is valid
-                    if sizeMsg < (3*self.nMarkers)+4: # If less than nMarker blobs are found, discard
+                    if sizeMsg < (3*self.markers)+4: # If less than nMarker blobs are found, discard
                         if self.verbose: print('[ERROR] '+str(int((sizeMsg-4)/3))+' markers were found')
                         missed[idx]+=1
                     else: 
@@ -189,16 +190,16 @@ class mcrServer(object):
                         coord,blobArea = msg[:,0:2], msg[:,2].reshape(-1) # Separating coordinates 
 
                         # If more than nMarker blobs are found, get the nMarker biggest
-                        if sizeMsg > (3*self.nMarkers)+4:
+                        if sizeMsg > (3*self.markers)+4:
                             orderAscDiameters = np.argsort(blobArea)[::-1] # Sorted by biggest to lowest diameter
-                            coord = np.array([coord[biggestBlobs] for biggestBlobs in orderAscDiameters[:self.nMarkers]]).reshape(-1,2)
+                            coord = np.array([coord[biggestBlobs] for biggestBlobs in orderAscDiameters[:self.markers]]).reshape(-1,2)
                     
                         # Store message parameters
                         a,b,timeNow,imgNumber = message[-4],message[-3],message[-2],int(message[-1])
 
                         # Undistort points
                         undCoord = processCentroids(coord,a,b,self.cameraMat[idx],distCoef[idx])
-                        if self.save: dfSave.append(np.concatenate((undCoord.reshape(2*self.nMarkers),[timeNow,imgNumber,idx]))) 
+                        if self.save: dfSave.append(np.concatenate((undCoord.reshape(2*self.markers),[timeNow,imgNumber,idx]))) 
 
                         # Time missmatch discarding
                         if counter[idx]:
@@ -216,11 +217,11 @@ class mcrServer(object):
                             if invalid[idx] >= 10 or not counter[idx]: 
                                 if self.verbose: print('reseting at camera', idx,', counter',counter[idx],',',timeNow/1e6,'s')
                                 prev = []
-                                needsOrder = activateNeedsOrder(self.nCameras,idx,needsOrder,relateLast2First=0)
+                                needsOrder = activateNeedsOrder(self.cameras,idx,needsOrder,relateLast2First=0)
                                 intervals[idx].append(counter[idx])
                             else:
-                                if not (counter[idx]-1): prev = np.array(dfOrig[idx][0:(2*self.nMarkers)]).reshape(-1,2) 
-                                else: prev = np.array(dfOrig[idx][-1,0:(2*self.nMarkers)]).reshape(-1,2) 
+                                if not (counter[idx]-1): prev = np.array(dfOrig[idx][0:(2*self.markers)]).reshape(-1,2) 
+                                else: prev = np.array(dfOrig[idx][-1,0:(2*self.markers)]).reshape(-1,2) 
                                 newOrder = getTheClosest(undCoord.reshape(-1,2),prev.reshape(-1,2))
                                 undCoord = np.copy(undCoord[newOrder])
                         else: 
@@ -231,8 +232,8 @@ class mcrServer(object):
 
                         # Update loop variables
                         lastTime[idx],lastImgNumber[idx],invalid[idx] = timeNow,imgNumber,0    
-                        if not counter[idx]: dfOrig[idx] = np.hstack((undCoord.reshape(2*self.nMarkers),timeNow)) 
-                        else: dfOrig[idx] = np.vstack((dfOrig[idx],np.hstack((undCoord.reshape(2*self.nMarkers),timeNow)))) 
+                        if not counter[idx]: dfOrig[idx] = np.hstack((undCoord.reshape(2*self.markers),timeNow)) 
+                        else: dfOrig[idx] = np.vstack((dfOrig[idx],np.hstack((undCoord.reshape(2*self.markers),timeNow)))) 
                         counter[idx] += 1
 
                         # Interpolate
@@ -243,8 +244,8 @@ class mcrServer(object):
                                 myCounter,myIntervals = np.array([counter[idx],counter[otherIdx]]),np.array([intervals[idx][-1],intervals[otherIdx][-1]])            
                                 if np.all(myCounter-myIntervals>=nPrevious):
                                     # See if there are intersection between arrays
-                                    ts1 = dfOrig[idx][intervals[idx][-1]:counter[idx],(2 * self.nMarkers)] / 1e6
-                                    ts2 = dfOrig[otherIdx][intervals[otherIdx][-1]:counter[otherIdx],(2 * self.nMarkers)] / 1e6 
+                                    ts1 = dfOrig[idx][intervals[idx][-1]:counter[idx],(2 * self.markers)] / 1e6
+                                    ts2 = dfOrig[otherIdx][intervals[otherIdx][-1]:counter[otherIdx],(2 * self.markers)] / 1e6 
 
                                     maxFirstIntersection = max(ts1[0], ts2[0])
                                     minLastIntersection = min(ts1[-1], ts2[-1])
@@ -259,7 +260,7 @@ class mcrServer(object):
 
                                         if ts1.shape[0] < 2 or ts2.shape[0] < 2: continue
 
-                                        coord1,coord2 = dfOrig[idx][intervals[idx][-1]:counter[idx],0:(2*self.nMarkers)],dfOrig[otherIdx][intervals[otherIdx][-1]:counter[otherIdx],0:(2*self.nMarkers)] 
+                                        coord1,coord2 = dfOrig[idx][intervals[idx][-1]:counter[idx],0:(2*self.markers)],dfOrig[otherIdx][intervals[otherIdx][-1]:counter[otherIdx],0:(2*self.markers)] 
                                         coord1,coord2 = np.copy(coord1[validIdx1]),np.copy(coord2[validIdx2])
                                         
                                         # Get interpolated data
@@ -274,8 +275,8 @@ class mcrServer(object):
                                         F = FMatrix[minIdx]
                                         
                                         # Order per epipolar line
-                                        if idx < otherIdx: orderSecondFrame,ret = getOrderPerEpiline(interp1[-1],interp2[-1],self.nMarkers,F,0,1) 
-                                        else: orderSecondFrame,ret = getOrderPerEpiline(interp2[-1],interp1[-1],self.nMarkers,F,0,1) 
+                                        if idx < otherIdx: orderSecondFrame,ret = getOrderPerEpiline(interp1[-1],interp2[-1],self.markers,F,0,1) 
+                                        else: orderSecondFrame,ret = getOrderPerEpiline(interp2[-1],interp1[-1],self.markers,F,0,1) 
                                         if not ret: 
                                             if self.verbose: print(minIdx,maxIdx,'could not rearange at',tNew2[-1]*self.step,'s')
                                             continue
@@ -285,16 +286,16 @@ class mcrServer(object):
                                         
                                         # Flip blobs
                                         for k in range(intervals[maxIdx][-1],counter[maxIdx]):
-                                            dfOrig[maxIdx][k,0:(2*self.nMarkers)] = np.copy(dfOrig[maxIdx][k,0:(2*self.nMarkers)].reshape(-1,2)[orderSecondFrame].reshape(-(2*self.nMarkers))) 
+                                            dfOrig[maxIdx][k,0:(2*self.markers)] = np.copy(dfOrig[maxIdx][k,0:(2*self.markers)].reshape(-1,2)[orderSecondFrame].reshape(-(2*self.markers))) 
                                         
                                         # Change ordering boolean
                                         needsOrder = popNeedsOrder(idx, otherIdx, needsOrder)
-                                        for k in range(maxIdx+1,self.nCameras):
-                                            needsOrder = activateNeedsOrder(self.nCameras,k,needsOrder,relateLast2First=0) 
+                                        for k in range(maxIdx+1,self.cameras):
+                                            needsOrder = activateNeedsOrder(self.cameras,k,needsOrder,relateLast2First=0) 
 
                         if (counter[idx]-intervals[idx][-1])>=warmUp: 
                             # Get data to interpolate
-                            coord,ts = dfOrig[idx][(counter[idx]-warmUp):counter[idx],0:(2*self.nMarkers)],dfOrig[idx][(counter[idx]-warmUp):counter[idx],(2*self.nMarkers)]/1e6 
+                            coord,ts = dfOrig[idx][(counter[idx]-warmUp):counter[idx],0:(2*self.markers)],dfOrig[idx][(counter[idx]-warmUp):counter[idx],(2*self.markers)]/1e6 
                             if not len(ts): continue
                             lowBound,highBound = math.ceil(ts[0]/self.step),math.floor(ts[-1]/self.step)
 
@@ -307,13 +308,13 @@ class mcrServer(object):
                             ff = CubicSpline(ts,coord,axis=0)
 
                             # Save data 
-                            dfInterp[tNew,int(idx*(2*self.nMarkers)):int(idx*(2*self.nMarkers)+(2*self.nMarkers))] = ff(tNew*self.step) 
+                            dfInterp[tNew,int(idx*(2*self.markers)):int(idx*(2*self.markers)+(2*self.markers))] = ff(tNew*self.step) 
                             lastTnew[idx] = tNew[-1]
 
                             # Compare if there is another camera available
                             for k in tNew:
                                 if dfInterp[k,-1]: continue
-                                otherIdx = getOtherValidIdx(dfInterp[k,:],self.nMarkers,idx) 
+                                otherIdx = getOtherValidIdx(dfInterp[k,:],self.markers,idx) 
                                 if not len(otherIdx) or otherIdx in needsOrder[str(idx)]: continue      
                                 
                                 # Get index from the other camera
@@ -323,7 +324,7 @@ class mcrServer(object):
                                 minIdx,maxIdx = min(idx,otherIdx),max(idx,otherIdx)
                                 
                                 # Getting the data
-                                pts1,pts2 = dfInterp[k,minIdx*(2*self.nMarkers):(minIdx+1)*(2*self.nMarkers)].reshape(-1,2),dfInterp[k,maxIdx*(2*self.nMarkers):(maxIdx+1)*(2*self.nMarkers)].reshape(-1,2) 
+                                pts1,pts2 = dfInterp[k,minIdx*(2*self.markers):(minIdx+1)*(2*self.markers)].reshape(-1,2),dfInterp[k,maxIdx*(2*self.markers):(maxIdx+1)*(2*self.markers)].reshape(-1,2) 
                                 R,t,lamb = rotation[maxIdx],translation[maxIdx].reshape(-1,3),scale[maxIdx]
                                 P1,P2 = np.hstack((cameraMat[minIdx], [[0.], [0.], [0.]])),np.matmul(cameraMat[maxIdx], np.hstack((R, t.T)))
                                 projPt1,projPt2 = projectionPoints(np.array(pts1)),projectionPoints(np.array(pts2))
@@ -343,7 +344,7 @@ class mcrServer(object):
                                 points3d += [0,0,-h,0]
                                 
                                 # Save to array
-                                dfTriang[k,0:(4*self.nMarkers)] = np.copy(points3d.ravel()) 
+                                dfTriang[k,0:(4*self.markers)] = np.copy(points3d.ravel()) 
                                 if not len(allPoints3d):
                                     allPoints3d = np.copy(points3d)
                                 else: 
@@ -381,11 +382,11 @@ class mcrServer(object):
 # Parser for command line
 parser = argparse.ArgumentParser(description='''Server for the MoCap system at the Erobotica lab of UFCG.
                                                 \nPlease use it together with the corresponding client script.''',add_help=False)
-parser.add_argument('-cam',type=int,help='number of active cameras in capture (default: 4)',default=4)
+parser.add_argument('-cam',type=str,help='list of active camera IDs (Default: 0,1,2,3)',default='0,1,2,3')
 parser.add_argument('-marker',type=int,help='number of expected markers (default: 4)',default=4)
 parser.add_argument('-trig',type=int,help='trigger time in seconds (default: 10)',default=10)
 parser.add_argument('-rec',type=int,help='recording time in seconds (default: 30)',default=30)
-parser.add_argument('-fps',type=int,help='interpolation fps (default: 100FPS)',default=100)
+parser.add_argument('-fps',type=int,help='interpolation fps (default: 100fps)',default=100)
 parser.add_argument('--verbose',help='show ordering and interpolation verbosity (default: off)',default=False, action='store_true')
 parser.add_argument('--help', action='help', default=argparse.SUPPRESS, help='show this help message and exit.')
 parser.add_argument('-save',help='save received packages to CSV (default: off)',default=False, action='store_true')

@@ -12,33 +12,31 @@ from mcr.plot import plotArena
 from mcr.constants import cameraMat, distCoef
 
 class mcrServer(object):
-    def __init__(self,nCameras,nMarkers,triggerTime,recTime,FPS,verbose,save):
+    def __init__(self,cameraids, markers,trigger,record,fps,verbose,save):
         # VARIABLES >>> DO NOT CHANGE <<<
-        self.nCameras = nCameras
-        self.nMarkers = nMarkers
-        self.triggerTime = triggerTime
-        self.recTime = recTime
-        self.FPS = FPS
-        self.step = 1 / FPS
+        self.cameraids = str(cameraids).split(',')
+        self.cameras = len(self.cameraids)
+        self.markers = markers
+        self.trigger = trigger
+        self.record = record
+        self.fps = fps
+        self.step = 1 / fps
         self.verbose = verbose
         self.save = save
         self.ipList = []
 
         # IP lookup from hostname
         try:
-            self.ipList = [socket.gethostbyname(f'cam{ID}.local') for ID in range(nCameras)]
+            self.ipList = [socket.gethostbyname(f'cam{idx}.local') for idx in self.cameraids]
         except socket.gaierror as e:
-            print('[ERROR] number of cameras do not match the number of IPs found')
+            print('[ERROR] Number of cameras do not match the number of IPs found')
             exit()
 
-        self.cameraMat = np.copy(cameraMat)
-        self.distCoef = np.copy(distCoef)
-
         # Do not change below this line, socket variables
-        self.nImages = int(self.recTime / self.step)
+        self.nImages = int(self.record / self.step)
         self.imageSize = []
         
-        for _ in range(self.nCameras): 
+        for _ in range(self.cameras): 
             self.imageSize.append([])
         
         print('[INFO] creating server')
@@ -52,7 +50,7 @@ class mcrServer(object):
         print('[INFO] server running, waiting for clients')
 
         addedCams,ports=[],[]
-        while len(addedCams)!=self.nCameras:
+        while len(addedCams)!=self.cameras:
             # Collect adresses
             message,address = self.server_socket.recvfrom(self.bufferSize)
 
@@ -79,9 +77,9 @@ class mcrServer(object):
         print('[INFO] all clients connected')
 
         # Send trigger
-        self.triggerTime += time.time()
-        for i in range(self.nCameras): 
-            self.server_socket.sendto((str(self.triggerTime)+' '+str(self.recTime)).encode(),tuple(ports[i]))
+        self.trigger += time.time()
+        for i in range(self.cameras): 
+            self.server_socket.sendto((str(self.trigger)+' '+str(self.record)).encode(),tuple(ports[i]))
         print('[INFO] trigger sent')
 
     # New intrinsics
@@ -130,10 +128,10 @@ class mcrServer(object):
     def collect(self):
         # Internal variables
         print('[INFO] waiting capture')
-        capture,counter = np.ones(self.nCameras,dtype=np.bool),np.zeros(self.nCameras,dtype=np.int8)
+        capture,counter = np.ones(self.cameras,dtype=np.bool),np.zeros(self.cameras,dtype=np.int8)
         dfSave,dfOrig = [],[]
 
-        for _ in range(self.nCameras): # For each camera
+        for _ in range(self.cameras): # For each camera
             dfOrig.append([]) # List for each camera
 
         # Capture loop
@@ -179,7 +177,7 @@ class mcrServer(object):
             scale,FMatrix = np.genfromtxt('data/lamb.csv', delimiter=','), np.genfromtxt('data/F.csv', delimiter=',').reshape(-1,3,3)
             
             # Order centroids
-            for j in range(self.nCameras-1):
+            for j in range(self.cameras-1):
                 # Collect extrinsics from calibration between camera 0 and 1
                 F = FMatrix[j]
                 R,t,lamb = rotation[j+1],translation[j+1].reshape(-1,3),scale[j+1]
@@ -262,11 +260,11 @@ class mcrServer(object):
 # Parser for command line
 parser = argparse.ArgumentParser(description='''Server for the MoCap system at the Erobotica lab of UFCG.
                                                 \nPlease use it together with the corresponding client script.''',add_help=False)
-parser.add_argument('-cam',type=int,help='number of active cameras in capture (default: 4)',default=4)
+parser.add_argument('-cam',type=str,help='list of active camera IDs (Default: 0,1,2,3)',default='0,1,2,3')
 parser.add_argument('-marker',type=int,help='number of expected markers (default: 4)',default=4)
 parser.add_argument('-trig',type=int,help='trigger time in seconds (default: 10)',default=10)
 parser.add_argument('-rec',type=int,help='recording time in seconds (default: 30)',default=30)
-parser.add_argument('-fps',type=int,help='interpolation fps (default: 100FPS)',default=100)
+parser.add_argument('-fps',type=int,help='interpolation fps (default: 100fps)',default=100)
 parser.add_argument('--verbose',help='show ordering and interpolation verbosity (default: off)',default=False, action='store_true')
 parser.add_argument('--help', action='help', default=argparse.SUPPRESS, help='show this help message and exit.')
 parser.add_argument('-save',help='save received packages to CSV (default: off)',default=False, action='store_true')

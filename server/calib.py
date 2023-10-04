@@ -13,33 +13,34 @@ from mcr.plot import plotArena
 from mcr.constants import cameraMat, distCoef
 
 class mcrServer(object):
-    def __init__(self,nCameras,nMarkers,triggerTime,recTime,FPS,verbose,save):
+    def __init__(self,cameraids, markers,trigger,record,fps,verbose,save):
         # VARIABLES >>> DO NOT CHANGE <<<
-        self.nCameras = nCameras
-        self.nMarkers = nMarkers
-        self.triggerTime = triggerTime
-        self.recTime = recTime
-        self.FPS = FPS
-        self.step = 1 / FPS
+        self.cameraids = str(cameraids).split(',')
+        self.cameras = len(self.cameraids)
+        self.markers = markers
+        self.trigger = trigger
+        self.record = record
+        self.fps = fps
+        self.step = 1 / fps
         self.verbose = verbose
         self.save = save
         self.ipList = []
 
         # IP lookup from hostname
         try:
-            self.ipList = [socket.gethostbyname(f'cam{idx}.local') for idx in range(nCameras)]
+            self.ipList = [socket.gethostbyname(f'cam{idx}.local') for idx in self.cameraids]
         except socket.gaierror as e:
-            print('[ERROR] number of cameras do not match the number of IPs found')
+            print('[ERROR] Number of cameras do not match the number of IPs found')
             exit()
 
         self.cameraMat = np.copy(cameraMat)
         self.distCoef = np.copy(distCoef)
 
         # Do not change below this line, socket variables
-        self.nImages = int(self.recTime / self.step)
+        self.nImages = int(self.record / self.step)
         self.imageSize = []
         
-        for _ in range(self.nCameras): 
+        for _ in range(self.cameras): 
             self.imageSize.append([])
         
         print('[INFO] creating server')
@@ -53,7 +54,7 @@ class mcrServer(object):
         print('[INFO] server running, waiting for clients')
 
         addedCams,ports=[],[]
-        while len(addedCams)!=self.nCameras:
+        while len(addedCams)!=self.cameras:
             # Collect adresses
             message,address = self.server_socket.recvfrom(self.bufferSize)
 
@@ -80,9 +81,9 @@ class mcrServer(object):
         print('[INFO] all clients connected')
 
         # Send trigger
-        self.triggerTime += time.time()
-        for i in range(self.nCameras): 
-            self.server_socket.sendto((str(self.triggerTime)+' '+str(self.recTime)).encode(),tuple(ports[i]))
+        self.trigger += time.time()
+        for i in range(self.cameras): 
+            self.server_socket.sendto((str(self.trigger)+' '+str(self.record)).encode(),tuple(ports[i]))
         print('[INFO] trigger sent')
 
     # New intrinsics
@@ -131,15 +132,15 @@ class mcrServer(object):
     def collect(self):
         # Internal variables
         print('[INFO] waiting capture')
-        capture = np.ones(self.nCameras,dtype=np.bool)
-        counter,lastTime = np.zeros(self.nCameras,dtype=np.uint16),np.zeros(self.nCameras,dtype=np.uint32)
-        missed,invalid = np.zeros(self.nCameras,dtype=np.uint32),np.zeros(self.nCameras,dtype=np.uint32)
-        swap,certainty = np.zeros(self.nCameras,dtype=np.uint16),np.zeros(self.nCameras,dtype=np.bool8)
-        lastImgNumber,tol = np.zeros(self.nCameras,dtype=np.int32),0.25
+        capture = np.ones(self.cameras,dtype=np.bool)
+        counter,lastTime = np.zeros(self.cameras,dtype=np.uint16),np.zeros(self.cameras,dtype=np.uint32)
+        missed,invalid = np.zeros(self.cameras,dtype=np.uint32),np.zeros(self.cameras,dtype=np.uint32)
+        swap,certainty = np.zeros(self.cameras,dtype=np.uint16),np.zeros(self.cameras,dtype=np.bool8)
+        lastImgNumber,tol = np.zeros(self.cameras,dtype=np.int32),0.25
         intervals,timeIntervals,dfSave,dfOrig = [],[],[],[]
         rotation,translation,scale,FMatrix,points3D_perPair, = [np.identity(3)],[[[0., 0., 0.]]],[[1]],[],[]
 
-        for i in range(self.nCameras): # For each camera
+        for i in range(self.cameras): # For each camera
             intervals.append([]) # List for each camera
             timeIntervals.append([]) # List for each camera
             dfOrig.append([]) # List for each camera
@@ -229,7 +230,7 @@ class mcrServer(object):
             destroyAllWindows()
 
             # Get last interval
-            for idx in range(self.nCameras):
+            for idx in range(self.cameras):
                 if not len(dfOrig[idx]): continue
                 if certainty[idx]:
                     beg,end = intervals[idx][-1],counter[idx]-1
@@ -238,13 +239,13 @@ class mcrServer(object):
             
             # Print results
             print('[RESULTS] server results are')
-            for i in range(self.nCameras): print('  >> camera '+str(i)+': '+str(len(dfOrig[i]))+' valid images, address '+str(self.ipList[i])+', missed '+str(int(missed[i]))+' images')
+            for i in range(self.cameras): print('  >> camera '+str(i)+': '+str(len(dfOrig[i]))+' valid images, address '+str(self.ipList[i])+', missed '+str(int(missed[i]))+' images')
             
             if self.save: 
                 np.savetxt('data/camCalib.csv', np.array(dfSave), delimiter=',')
             
             # Get pose between each pair
-            for cam in range(self.nCameras-1):
+            for cam in range(self.cameras-1):
                 # Compute valid time intersection for interpolation
                 intersections = [[max(first[0], second[0]), min(first[1], second[1])]  
                                     for first in timeIntervals[cam] for second in timeIntervals[cam+1]  
@@ -252,7 +253,7 @@ class mcrServer(object):
                 
                 # Create and fill inteprolation dataset based on the intersection of valid time intervals 
                 dfInterp = np.zeros((self.nImages,2*6+1))
-                dfInterp[:,-1] = np.arange(0,self.recTime,self.step)
+                dfInterp[:,-1] = np.arange(0,self.record,self.step)
                 for [beg,end] in intersections:
                     for idx in range(cam,cam+2):
                         validIdx = [i for i in range(0,len(dfOrig[idx])) if beg<=dfOrig[idx][i,-1]<=end]
@@ -380,7 +381,7 @@ class mcrServer(object):
             allPoints3d,projMat = [],[]           
 
             # Getting coordinates from each camera and 3D points in relation to the 0th camera
-            for cam in range(self.nCameras):
+            for cam in range(self.cameras):
                 # Initialize initial values of the projection matrices
                 P_new = np.vstack((np.hstack((np.identity(3),np.zeros((3,1)))),np.hstack((np.zeros((3)),1))))
 
@@ -396,7 +397,7 @@ class mcrServer(object):
                 projMat.append(P_new)
 
                 # Save triangulated 3D points in relation to the 0th camera
-                if cam < self.nCameras-1:
+                if cam < self.cameras-1:
                     points3d = np.hstack((points3D_perPair[cam]*scale[cam+1][0]/100,np.ones((points3D_perPair[cam].shape[0],1)))).T
                     points3d = np.matmul(P_new,points3d)
                     if not len(allPoints3d): 
@@ -417,14 +418,14 @@ class mcrServer(object):
 # Parser for command line
 parser = argparse.ArgumentParser(description='''Server for the MoCap system at the Erobotica lab of UFCG.
                                                 \nPlease use it together with the corresponding client script.''',add_help=False)
-parser.add_argument('-cam',type=int,help='number of active cameras in capture (default: 4)',default=4)
+parser.add_argument('-cam',type=str,help='list of active camera IDs (Default: 0,1,2,3)',default='0,1,2,3')
 parser.add_argument('-marker',type=int,help='number of expected markers (default: 4)',default=4)
 parser.add_argument('-trig',type=int,help='trigger time in seconds (default: 10)',default=10)
 parser.add_argument('-rec',type=int,help='recording time in seconds (default: 30)',default=30)
-parser.add_argument('-fps',type=int,help='interpolation fps (default: 100FPS)',default=100)
+parser.add_argument('-fps',type=int,help='interpolation fps (default: 100fps)',default=100)
 parser.add_argument('--verbose',help='show ordering and interpolation verbosity (default: off)',default=False, action='store_true')
-parser.add_argument('--help', action='help', default=argparse.SUPPRESS, help='show this help message and exit.')
 parser.add_argument('-save',help='save received packages to CSV (default: off)',default=False, action='store_true')
+parser.add_argument('--help', action='help', default=argparse.SUPPRESS, help='show this help message and exit.')
 args = parser.parse_args()
 
 mcrServer_ = mcrServer(args.cam, args.marker, args.trig, args.rec, args.fps, args.verbose, args.save)
