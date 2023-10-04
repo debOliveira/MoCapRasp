@@ -1,7 +1,8 @@
 # IMPORTS >>> DO NOT CHANGE <<<
 import warnings
 warnings.filterwarnings('ignore')
-import socket,time,click
+import socket,time,click, os
+from datetime import datetime
 import numpy as np
 from cv2 import destroyAllWindows,triangulatePoints
 
@@ -166,9 +167,18 @@ class GPE(object):
             self.server_socket.close()
             destroyAllWindows()
 
-            # Save results
+            # Save Ground Plane Estimation GPE Data
             if self.save: 
-                np.savetxt('data/camGround.csv', np.array(dfSave), delimiter=',')
+                now = datetime.now()
+                DMY, HMS = now.strftime('%d-%m-%y'), now.strftime('%H-%M-%S')
+                path = 'dataSaves/' + DMY + '/'
+
+                # Check whether directory already exists
+                if not os.path.exists(path):
+                    os.mkdir(path)
+                    print('Folder %s created!' % path)
+        
+                np.savetxt(path + 'GPE-' + HMS + '.csv', np.array(dfSave), delimiter=',')
 
             # Import R,T and lambda
             rotation = np.genfromtxt('data/R.csv', delimiter=',').reshape(-1,3,3)

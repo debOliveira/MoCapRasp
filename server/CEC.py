@@ -1,7 +1,8 @@
 # IMPORTS >>> DO NOT CHANGE <<<
 import warnings
 warnings.filterwarnings('ignore')
-import socket,time,math,click
+import socket,time,math,click, os
+from datetime import datetime
 import numpy as np
 from scipy.interpolate import CubicSpline
 from cv2 import destroyAllWindows,triangulatePoints
@@ -229,6 +230,19 @@ class CEC(object):
             self.server_socket.close()
             destroyAllWindows()
 
+            # Save Camera Extrinsics Calibration (CEC) Data
+            if self.save: 
+                now = datetime.now()
+                DMY, HMS = now.strftime('%d-%m-%y'), now.strftime('%H-%M-%S')
+                path = 'dataSaves/' + DMY + '/'
+
+                # Check whether directory already exists
+                if not os.path.exists(path):
+                    os.mkdir(path)
+                    print('Folder %s created!' % path)
+        
+                np.savetxt(path + 'CEC-' + HMS + '.csv', np.array(dfSave), delimiter=',')
+
             # Get last interval
             for idx in range(self.cameras):
                 if not len(dfOrig[idx]): continue
@@ -240,9 +254,6 @@ class CEC(object):
             # Print results
             print('[RESULTS] server results are')
             for i in range(self.cameras): print('  >> camera '+str(i)+': '+str(len(dfOrig[i]))+' valid images, address '+str(self.ipList[i])+', missed '+str(int(missed[i]))+' images')
-            
-            if self.save: 
-                np.savetxt('data/camCalib.csv', np.array(dfSave), delimiter=',')
             
             # Get pose between each pair
             for cam in range(self.cameras-1):

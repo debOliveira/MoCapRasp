@@ -1,7 +1,8 @@
 # IMPORTS >>> DO NOT CHANGE <<<
 import warnings
 warnings.filterwarnings('ignore')
-import socket,time,math,click
+import socket,time,math,click, os
+from datetime import datetime
 import numpy as np
 from scipy.interpolate import CubicSpline
 from cv2 import destroyAllWindows,triangulatePoints
@@ -355,9 +356,18 @@ class SCR(object):
             self.server_socket.close()
             destroyAllWindows()
             
-            # Save results
+            # Save Standard Capture Routine (SCR) Data
             if self.save: 
-                np.savetxt('data/camTest.csv', np.array(dfSave), delimiter=',')
+                now = datetime.now()
+                DMY, HMS = now.strftime('%d-%m-%y'), now.strftime('%H-%M-%S')
+                path = 'dataSaves/' + DMY + '/'
+
+                # Check whether directory already exists
+                if not os.path.exists(path):
+                    os.mkdir(path)
+                    print('Folder %s created!' % path)
+        
+                np.savetxt(path + 'SCR-' + HMS + '.csv', np.array(dfSave), delimiter=',')
             
             # Just comprising dataset if wanted to plot
             emptyLines = np.unique([i for i in range(0,dfInterp.shape[0]) if not dfInterp[i][-1]])
