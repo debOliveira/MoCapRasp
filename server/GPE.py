@@ -1,134 +1,23 @@
 # IMPORTS >>> DO NOT CHANGE <<<
 import warnings
 warnings.filterwarnings('ignore')
-import socket,time,click, os
+import click, os
 from datetime import datetime
 import numpy as np
-from cv2 import destroyAllWindows,triangulatePoints
+from cv2 import destroyAllWindows, triangulatePoints
 
+from mcr.CaptureProcess import CaptureProcess
 from mcr.math import findPlane
 from mcr.cameras import projectionPoints
 from mcr.markers import processCentroids, getOrderPerEpiline
 from mcr.plot import plotArena
-from mcr.constants import cameraMat, distCoef
 
-class GPE(object):
-    def __init__(self,cameraids, markers,trigger,record,fps,verbose,save):
-        # VARIABLES >>> DO NOT CHANGE <<<
-        self.cameraids = str(cameraids).split(',')
-        self.cameras = len(self.cameraids)
-        self.markers = markers
-        self.trigger = trigger
-        self.record = record
-        self.fps = fps
-        self.step = 1 / fps
-        self.verbose = verbose
-        self.save = save
-        self.ipList = []
-
-        # IP lookup from hostname
-        try:
-            self.ipList = [socket.gethostbyname(f'cam{idx}.local') for idx in self.cameraids]
-        except socket.gaierror as e:
-            print('[ERROR] Number of cameras do not match the number of IPs found')
-            exit()
-
-        # Do not change below this line, socket variables
-        self.nImages = int(self.record / self.step)
-        self.imageSize = []
-        
-        for _ in range(self.cameras): 
-            self.imageSize.append([])
-        
-        print('[INFO] creating server')
-
-        self.bufferSize = 1024
-        self.server_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM) 
-        self.server_socket.bind(('0.0.0.0',8888))
-
-    # Connect with clients
-    def connect(self):
-        print('[INFO] server running, waiting for clients')
-
-        addedCams,ports=[],[]
-        while len(addedCams)!=self.cameras:
-            # Collect adresses
-            message,address = self.server_socket.recvfrom(self.bufferSize)
-
-            # Check if it is in IP list
-            if address[0] not in self.ipList:
-                print('[ERROR] IP '+address[0]+' not in the list')
-                exit()
-
-            # Get image size
-            idx = self.ipList.index(address[0])
-            self.imageSize[idx] = np.array(message.decode('utf-8').split(',')).astype(np.int)
-            print('[INFO] camera '+str(idx)+' connected at '+str(address[0]))
-
-            # Redo intrinsics
-            ret,newCamMatrix=self.mcrIntrinsics(self.cameraMat[idx],self.imageSize[idx][0],self.imageSize[idx][1],self.imageSize[idx][2])
-            if ret: 
-                self.cameraMat[idx]=np.copy(newCamMatrix)
-            else: 
-                exit()
-
-            addedCams.append(idx)
-            ports.append(address)
-        
-        print('[INFO] all clients connected')
-
-        # Send trigger
-        self.trigger += time.time()
-        for i in range(self.cameras): 
-            self.server_socket.sendto((str(self.trigger)+' '+str(self.record)).encode(),tuple(ports[i]))
-        print('[INFO] trigger sent')
-
-    # New intrinsics
-    def mcrIntrinsics(self,origMatrix,w,h,mode):
-        camIntris = np.copy(origMatrix) # Copy to avoid register error
-        
-        # Check if image is at the available proportion
-        if w/h==4/3 or w/h==16/9:
-            if mode==4: # Only resize
-                ratio = w/960
-                camIntris[0][0],camIntris[0][2]=ratio*camIntris[0][0],ratio*camIntris[0][2]
-                camIntris[1][1],camIntris[1][2]=ratio*camIntris[1][1],ratio*camIntris[1][2]
-
-            elif mode==5: # Crop in X and resize
-                ratio = 1640/960
-                camIntris[0][0],camIntris[0][2]=ratio*camIntris[0][0],ratio*camIntris[0][2]
-                camIntris[1][1],camIntris[1][2]=ratio*camIntris[1][1],ratio*camIntris[1][2]-155
-                ratio = w/1640
-                camIntris[0][0],camIntris[0][2]=ratio*camIntris[0][0],ratio*camIntris[0][2]
-                camIntris[1][1],camIntris[1][2]=ratio*camIntris[1][1],ratio*camIntris[1][2]
-
-            elif mode==6: # Crop in Y and X and resize
-                ratio=1640/960
-                camIntris[0][0],camIntris[0][2]=ratio*camIntris[0][0],ratio*camIntris[0][2]-180
-                camIntris[1][1],camIntris[1][2]=ratio*camIntris[1][1],ratio*camIntris[1][2]-255
-                ratio = w/1280
-                camIntris[0][0],camIntris[0][2]=ratio*camIntris[0][0],ratio*camIntris[0][2]
-                camIntris[1][1],camIntris[1][2]=ratio*camIntris[1][1],ratio*camIntris[1][2]
-
-            elif mode==7: # Crop in Y and X and resize
-                ratio=1640/960
-                camIntris[0][0],camIntris[0][2]=ratio*camIntris[0][0],ratio*camIntris[0][2]-500
-                camIntris[1][1],camIntris[1][2]=ratio*camIntris[1][1],ratio*camIntris[1][2]-375
-                ratio = w/640
-                camIntris[0][0],camIntris[0][2]=ratio*camIntris[0][0],ratio*camIntris[0][2]
-                camIntris[1][1],camIntris[1][2]=ratio*camIntris[1][1],ratio*camIntris[1][2]
-            else:
-                print('conversion for intrinsics matrix not known')
-                return False,camIntris
-            return True,camIntris
-        else:
-            print('out of proportion of the camera mode')
-            return False,camIntris
-
+class GPE(CaptureProcess):
     # Collect points from clients, order and trigger interpolation
     def collect(self):
-        # Internal variables
         print('[INFO] waiting capture')
+        
+        # Internal variables
         capture,counter = np.ones(self.cameras,dtype=np.bool),np.zeros(self.cameras,dtype=np.int8)
         dfSave,dfOrig = [],[]
 
@@ -138,7 +27,7 @@ class GPE(object):
         # Capture loop
         try:
             while np.any(capture):
-                #  Receive message
+                # Receive message
                 bytesPair = self.server_socket.recvfrom(self.bufferSize)
                 message = np.frombuffer(bytesPair[0],dtype=np.float64)
                 address,sizeMsg = bytesPair[1],len(message)
@@ -154,7 +43,7 @@ class GPE(object):
                     if not len(coord): continue
 
                     # Undistort points
-                    undCoord = processCentroids(coord,a,b,self.cameraMat[idx],distCoef[idx])
+                    undCoord = processCentroids(coord,a,b,self.cameraMat[idx],self.distCoef[idx])
                     if undCoord.shape[0]==3:
                         if self.save: dfSave.append(np.concatenate((undCoord.reshape(undCoord.shape[0]*undCoord.shape[1]),[timeNow,imgNumber,idx])))
                         if not counter[idx]: dfOrig[idx] = np.hstack((undCoord.reshape(6),timeNow))
@@ -167,20 +56,20 @@ class GPE(object):
             self.server_socket.close()
             destroyAllWindows()
 
-            # Save Ground Plane Estimation GPE Data
+            # Save Ground Plane Estimation (GPE) Data
             if self.save: 
                 now = datetime.now()
                 DMY, HMS = now.strftime('%d-%m-%y'), now.strftime('%H-%M-%S')
-                path = 'dataSaves/' + DMY + '/'
+                path = './dataSaves/' + DMY + '/'
 
                 # Check whether directory already exists
                 if not os.path.exists(path):
                     os.mkdir(path)
                     print('Folder %s created!' % path)
-        
+
                 np.savetxt(path + 'GPE-' + HMS + '.csv', np.array(dfSave), delimiter=',')
 
-            # Import R,T and lambda
+            # Import R,t and lambda
             rotation = np.genfromtxt('data/R.csv', delimiter=',').reshape(-1,3,3)
             translation = np.genfromtxt('data/t.csv', delimiter=',').reshape(-1,1,3)
             projMat = np.genfromtxt('data/projMat.csv', delimiter=',').reshape(-1,4,4)
@@ -203,7 +92,7 @@ class GPE(object):
             # Triangulate ordered centroids from the first pair
             pts1,pts2 = np.copy(dfOrig[0][0:6].reshape(-1,2)),np.copy(dfOrig[1][0:6].reshape(-1,2))
             R,t,lamb = rotation[1],translation[1].reshape(-1,3),scale[1]
-            P1,P2 = np.hstack((cameraMat[0], [[0.], [0.], [0.]])),np.matmul(cameraMat[1], np.hstack((R, t.T)))
+            P1,P2 = np.hstack((self.cameraMat[0], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[1], np.hstack((R, t.T)))
             projPt1,projPt2 = projectionPoints(np.array(pts1)),projectionPoints(np.array(pts2))
             points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
             points3d = (points4d[:3, :]/points4d[3, :]).T
@@ -239,8 +128,8 @@ class GPE(object):
             newPlane = np.array([A,B,C])
 
             groundData = {'planeDisplacement': d/b, 
-                        'planeRotation': P_plane,
-                        'planeCoefficients': newPlane}
+                          'planeRotation': P_plane,
+                          'planeCoefficients': newPlane}
 
             # Preparing camera data
             o = np.matmul(projMat[0],[[0.],[0.],[0.],[1]]).ravel()
@@ -249,7 +138,7 @@ class GPE(object):
             h = o[2] # Let 'h' be the height of the 0th camera
 
             cameraData = {'cameraHeight': h,
-                        'projectionMatrices': projMat}
+                          'projectionMatrices': projMat}
 
             # Preparing captured data 
             allPoints3d = np.hstack((allPoints3d,np.ones((allPoints3d.shape[0],1))))
