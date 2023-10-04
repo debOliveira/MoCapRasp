@@ -1,7 +1,7 @@
 # IMPORTS >>> DO NOT CHANGE <<<
 import warnings
 warnings.filterwarnings('ignore')
-import socket,time,math,argparse
+import socket,time,math,click
 import numpy as np
 from scipy.interpolate import CubicSpline
 from cv2 import destroyAllWindows,triangulatePoints
@@ -416,19 +416,18 @@ class mcrServer(object):
                       cameraData=cameraData)
 
 # Parser for command line
-parser = argparse.ArgumentParser(description='''Server for the MoCap system at the Erobotica lab of UFCG.
-                                                \nPlease use it together with the corresponding client script.''',add_help=False)
-parser.add_argument('-cam',type=str,help='list of active camera IDs (Default: 0,1,2,3)',default='0,1,2,3')
-parser.add_argument('-marker',type=int,help='number of expected markers (default: 4)',default=4)
-parser.add_argument('-trig',type=int,help='trigger time in seconds (default: 10)',default=10)
-parser.add_argument('-rec',type=int,help='recording time in seconds (default: 30)',default=30)
-parser.add_argument('-fps',type=int,help='interpolation fps (default: 100fps)',default=100)
-parser.add_argument('--verbose',help='show ordering and interpolation verbosity (default: off)',default=False, action='store_true')
-parser.add_argument('-save',help='save received packages to CSV (default: off)',default=False, action='store_true')
-parser.add_argument('--help', action='help', default=argparse.SUPPRESS, help='show this help message and exit.')
-args = parser.parse_args()
-
-mcrServer_ = mcrServer(args.cam, args.marker, args.trig, args.rec, args.fps, args.verbose, args.save)
-
-mcrServer_.connect()
-mcrServer_.collect()
+@click.command(name="calib")
+@click.option('--cameraids', '-c', default = '0,1,2,3', help = 'List of active camera IDs (Default: 0,1,2,3)')
+@click.option('--markers',   '-m', default = 3,         help = 'Number of expected markers (Default: 3)')
+@click.option('--trigger',   '-t', default = 10,        help = 'Trigger time in seconds (Default: 10)')
+@click.option('--record',    '-r', default = 120,       help = 'Recording time in seconds (Default: 120)')
+@click.option('--fps',       '-f', default = 100,       help = 'Interpolation FPS (Default: 100)')
+@click.option('--verbose',   '-v', is_flag = True,      help = 'Show ordering and interpolation verbosity')
+@click.option('--save',      '-s', is_flag = True,      help = 'Save received packages to CSV')
+def calib(cameraids, markers, trigger, record, fps, verbose, save):
+    """
+    Camera Extrinsic Calibration
+    """
+    mcrServer_ = mcrServer(cameraids, markers, trigger, record, fps, verbose, save)
+    mcrServer_.connect()
+    mcrServer_.collect() 
