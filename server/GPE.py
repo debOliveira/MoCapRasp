@@ -11,7 +11,7 @@ from mcr.markers import processCentroids, getOrderPerEpiline
 from mcr.plot import plotArena
 from mcr.constants import cameraMat, distCoef
 
-class mcrServer(object):
+class GPE(object):
     def __init__(self,cameraids, markers,trigger,record,fps,verbose,save):
         # VARIABLES >>> DO NOT CHANGE <<<
         self.cameraids = str(cameraids).split(',')
@@ -258,7 +258,7 @@ class mcrServer(object):
             np.savetxt('data/groundData.csv', np.array([d,b,h]), delimiter=',')
 
 # Parser for command line
-@click.command(name="ground")
+@click.command(name="gpe")
 @click.option('--cameraids', '-c', default = '0,1,2,3', help = 'List of active camera IDs (Default: 0,1,2,3)')
 @click.option('--markers',   '-m', default = 3,         help = 'Number of expected markers (Default: 3)')
 @click.option('--trigger',   '-t', default = 2,         help = 'Trigger time in seconds (Default: 2)')
@@ -266,10 +266,10 @@ class mcrServer(object):
 @click.option('--fps',       '-f', default = 100,       help = 'Interpolation FPS (Default: 100)')
 @click.option('--verbose',   '-v', is_flag = True,      help = 'Show ordering and interpolation verbosity')
 @click.option('--save',      '-s', is_flag = True,      help = 'Save received packages to CSV')
-def ground(cameraids, markers, trigger, record, fps, verbose, save):
+def gpe(cameraids, markers, trigger, record, fps, verbose, save):
     """
-    Ground Plane Estimation
+    GPE: Ground Plane Estimation
     """
-    mcrServer_ = mcrServer(cameraids, markers, trigger, record, fps, verbose, save)
-    mcrServer_.connect()
-    mcrServer_.collect() 
+    gpeServer = GPE(cameraids, markers, trigger, record, fps, verbose, save)
+    gpeServer.connect()
+    gpeServer.collect()

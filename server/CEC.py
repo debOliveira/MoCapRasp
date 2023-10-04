@@ -12,7 +12,7 @@ from mcr.markers import orderCenterCoord, occlusion, processCentroids
 from mcr.plot import plotArena
 from mcr.constants import cameraMat, distCoef
 
-class mcrServer(object):
+class CEC(object):
     def __init__(self,cameraids, markers,trigger,record,fps,verbose,save):
         # VARIABLES >>> DO NOT CHANGE <<<
         self.cameraids = str(cameraids).split(',')
@@ -416,7 +416,7 @@ class mcrServer(object):
                       cameraData=cameraData)
 
 # Parser for command line
-@click.command(name="calib")
+@click.command(name="cec")
 @click.option('--cameraids', '-c', default = '0,1,2,3', help = 'List of active camera IDs (Default: 0,1,2,3)')
 @click.option('--markers',   '-m', default = 3,         help = 'Number of expected markers (Default: 3)')
 @click.option('--trigger',   '-t', default = 10,        help = 'Trigger time in seconds (Default: 10)')
@@ -424,10 +424,10 @@ class mcrServer(object):
 @click.option('--fps',       '-f', default = 100,       help = 'Interpolation FPS (Default: 100)')
 @click.option('--verbose',   '-v', is_flag = True,      help = 'Show ordering and interpolation verbosity')
 @click.option('--save',      '-s', is_flag = True,      help = 'Save received packages to CSV')
-def calib(cameraids, markers, trigger, record, fps, verbose, save):
+def cec(cameraids, markers, trigger, record, fps, verbose, save):
     """
-    Camera Extrinsic Calibration
+    CEC: Camera Extrinsic Calibration
     """
-    mcrServer_ = mcrServer(cameraids, markers, trigger, record, fps, verbose, save)
-    mcrServer_.connect()
-    mcrServer_.collect() 
+    cecServer = CEC(cameraids, markers, trigger, record, fps, verbose, save)
+    cecServer.connect()
+    cecServer.collect() 

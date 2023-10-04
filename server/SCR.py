@@ -12,7 +12,7 @@ from mcr.markers import occlusion, processCentroids, getOrderPerEpiline, createN
 from mcr.plot import plotArena
 from mcr.constants import cameraMat, distCoef
 
-class mcrServer(object):
+class SCR(object):
     def __init__(self,cameraids, markers,trigger,record,fps,verbose,save):
         # VARIABLES >>> DO NOT CHANGE <<<
         self.cameraids = str(cameraids).split(',')
@@ -380,18 +380,18 @@ class mcrServer(object):
                       groundData=groundData)
          
 # Parser for command line            
-@click.command(name="capture")
+@click.command(name="scr")
 @click.option('--cameraids', '-c', default = '0,1,2,3', help = 'List of active camera IDs (Default: 0,1,2,3)')
-@click.option('--markers',   '-m', default = 3,         help = 'Number of expected markers (Default: 3)')
-@click.option('--trigger',   '-t', default = 2,         help = 'Trigger time in seconds (Default: 2)')
-@click.option('--record',    '-r', default = 10,        help = 'Recording time in seconds (Default: 10)')
+@click.option('--markers',   '-m', default = 4,         help = 'Number of expected markers (Default: 3)')
+@click.option('--trigger',   '-t', default = 5,         help = 'Trigger time in seconds (Default: 5)')
+@click.option('--record',    '-r', default = 30,        help = 'Recording time in seconds (Default: 30)')
 @click.option('--fps',       '-f', default = 100,       help = 'Interpolation FPS (Default: 100)')
 @click.option('--verbose',   '-v', is_flag = True,      help = 'Show ordering and interpolation verbosity')
 @click.option('--save',      '-s', is_flag = True,      help = 'Save received packages to CSV')
-def capture(cameraids, markers, trigger, record, fps, verbose, save):
+def scr(cameraids, markers, trigger, record, fps, verbose, save):
     """
-    Standard Capture Routine
+    SCR: Standard Capture Routine
     """
-    mcrServer_ = mcrServer(cameraids, markers, trigger, record, fps, verbose, save)
-    mcrServer_.connect()
-    mcrServer_.collect() 
+    scrServer = SCR(cameraids, markers, trigger, record, fps, verbose, save)
+    scrServer.connect()
+    scrServer.collect() 
