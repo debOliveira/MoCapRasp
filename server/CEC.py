@@ -311,20 +311,3 @@ class CEC(CaptureProcess):
             plotArena(title='3D Map of the Calibration Process', 
                       allPoints3d=allPoints3d, 
                       cameraData=cameraData)
-
-# Parser for command line
-@click.command(name="cec")
-@click.option('--cameraids', '-c', default = '0,1,2,3', help = 'List of active camera IDs (Default: 0,1,2,3)')
-@click.option('--markers',   '-m', default = 3,         help = 'Number of expected markers (Default: 3)')
-@click.option('--trigger',   '-t', default = 10,        help = 'Trigger time in seconds (Default: 10)')
-@click.option('--record',    '-r', default = 120,       help = 'Recording time in seconds (Default: 120)')
-@click.option('--fps',       '-f', default = 100,       help = 'Interpolation FPS (Default: 100)')
-@click.option('--verbose',   '-v', is_flag = True,      help = 'Show ordering and interpolation verbosity')
-@click.option('--save',      '-s', is_flag = True,      help = 'Save received packages to CSV')
-def cec(cameraids, markers, trigger, record, fps, verbose, save):
-    """
-    CEC: Camera Extrinsic Calibration
-    """
-    cecServer = CEC(cameraids, markers, trigger, record, fps, verbose, save)
-    cecServer.connect()
-    cecServer.collect() 

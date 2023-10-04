@@ -272,20 +272,3 @@ class SCR(CaptureProcess):
                       allPoints3d=allPoints3d, 
                       cameraData=cameraData, 
                       groundData=groundData)
-         
-# Parser for command line            
-@click.command(name="scr")
-@click.option('--cameraids', '-c', default = '0,1,2,3', help = 'List of active camera IDs (Default: 0,1,2,3)')
-@click.option('--markers',   '-m', default = 4,         help = 'Number of expected markers (Default: 3)')
-@click.option('--trigger',   '-t', default = 5,         help = 'Trigger time in seconds (Default: 5)')
-@click.option('--record',    '-r', default = 30,        help = 'Recording time in seconds (Default: 30)')
-@click.option('--fps',       '-f', default = 100,       help = 'Interpolation FPS (Default: 100)')
-@click.option('--verbose',   '-v', is_flag = True,      help = 'Show ordering and interpolation verbosity')
-@click.option('--save',      '-s', is_flag = True,      help = 'Save received packages to CSV')
-def scr(cameraids, markers, trigger, record, fps, verbose, save):
-    """
-    SCR: Standard Capture Routine
-    """
-    scrServer = SCR(cameraids, markers, trigger, record, fps, verbose, save)
-    scrServer.connect()
-    scrServer.collect() 

@@ -155,20 +155,3 @@ class GPE(CaptureProcess):
             # Save data
             np.savetxt('data/P_plane.csv', np.array(P_plane), delimiter=',')
             np.savetxt('data/groundData.csv', np.array([d,b,h]), delimiter=',')
-
-# Parser for command line
-@click.command(name="gpe")
-@click.option('--cameraids', '-c', default = '0,1,2,3', help = 'List of active camera IDs (Default: 0,1,2,3)')
-@click.option('--markers',   '-m', default = 3,         help = 'Number of expected markers (Default: 3)')
-@click.option('--trigger',   '-t', default = 2,         help = 'Trigger time in seconds (Default: 2)')
-@click.option('--record',    '-r', default = 10,        help = 'Recording time in seconds (Default: 10)')
-@click.option('--fps',       '-f', default = 100,       help = 'Interpolation FPS (Default: 100)')
-@click.option('--verbose',   '-v', is_flag = True,      help = 'Show ordering and interpolation verbosity')
-@click.option('--save',      '-s', is_flag = True,      help = 'Save received packages to CSV')
-def gpe(cameraids, markers, trigger, record, fps, verbose, save):
-    """
-    GPE: Ground Plane Estimation
-    """
-    gpeServer = GPE(cameraids, markers, trigger, record, fps, verbose, save)
-    gpeServer.connect()
-    gpeServer.collect()
