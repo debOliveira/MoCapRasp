@@ -4,7 +4,7 @@ warnings.filterwarnings('ignore')
 import socket, time
 import numpy as np
 
-from mcr.constants import cameraMat, distCoef
+from mcr.misc.constants import cameraMat, distCoef
 
 class CaptureProcess(object):
     def __init__(self,cameraids,markers,trigger,record,fps,verbose,save):
@@ -63,7 +63,7 @@ class CaptureProcess(object):
             print('[INFO] Camera '+str(idx)+' connected at '+str(address[0]))
 
             # Redo intrinsics
-            ret,newCamMatrix=self.mcrIntrinsics(self.cameraMat[idx],self.imageSize[idx][0],self.imageSize[idx][1],self.imageSize[idx][2])
+            ret,newCamMatrix=self.intrinsics(self.cameraMat[idx],self.imageSize[idx][0],self.imageSize[idx][1],self.imageSize[idx][2])
             if ret: 
                 self.cameraMat[idx]=np.copy(newCamMatrix)
             else: 
@@ -81,7 +81,7 @@ class CaptureProcess(object):
         print('[INFO] Trigger sent')
 
     # New intrinsics
-    def mcrIntrinsics(self,origMatrix,w,h,mode):
+    def intrinsics(self,origMatrix,w,h,mode):
         camIntris = np.copy(origMatrix) # Copy to avoid register error
 
         # Check if image is at the available proportion

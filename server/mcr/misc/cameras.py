@@ -1,7 +1,7 @@
 import numpy as np
 from cv2.fisheye import undistortPoints
 
-from mcr.math import normalizePoints, singularValueDecomposition
+from mcr.misc.math import normalizePoints, singularValueDecomposition
 
 # LINEAR CAMERA MODEL
 

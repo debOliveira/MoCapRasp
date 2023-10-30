@@ -5,11 +5,12 @@ setup(
     version='1.0.0',
     packages=find_packages(),
     install_requires=[
-        'click',
-        'scipy',
+        'opencv-python', 
         'numpy',
+        'scipy',
+        'scikit-learn',
         'matplotlib',
-        'opencv-python'
+        'click'
     ],
     entry_points="""
     [console_scripts]

@@ -19,11 +19,11 @@ We used RaspPi 4b 16GB RAM with Raspbian 32 bits.
 
 ## 🏗️ Requirements
 
-- When installing the [Raspbian OS](https://www.raspbian.org/), change the hostname to `camX`, for `X` the number of the camera
+- When installing the [Raspbian OS](https://www.raspbian.org/), change the hostname to `camX`, for `X` the camera ID number
 
-- Access the Pi remotely (e.g. for camera 1)
+- Access the Pi remotely (e.g. for camera 0)
 ``` shell 
-ssh pi@cam1.local
+ssh pi@cam0.local
 ``` 
 
 - Install requirements
@@ -63,7 +63,7 @@ source test.sh
 
 ## ⚔️ Usage
 
-1) Run the `calib.py`, `ground.py` or `capture.py` in the server
+1) Run a capture routine in the server (`mocaprasp cec`, `mocaprasp gpe` or `mocaprasp scr`)
 2) `source run.sh`
 3) Press <kbd>Ctrl+C</kbd> when capture is finished to avoid waiting for the timeout
 > You can change the timeout waiting in line 85 of `watch.py` (default: 300 seconds)

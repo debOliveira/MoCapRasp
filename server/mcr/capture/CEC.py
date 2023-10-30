@@ -1,17 +1,18 @@
 # IMPORTS >>> DO NOT CHANGE <<<
 import warnings
 warnings.filterwarnings('ignore')
-import click, os, math
+import os, math
 from datetime import datetime
 import numpy as np
 from scipy.interpolate import CubicSpline
 from cv2 import destroyAllWindows, triangulatePoints
 
-from mcr.CaptureProcess import CaptureProcess
-from mcr.math import isCollinear
-from mcr.cameras import estimateFundMatrix_8norm, decomposeEssentialMat, projectionPoints
-from mcr.markers import orderCenterCoord, occlusion, processCentroids
-from mcr.plot import plotArena
+from mcr.capture.CaptureProcess import CaptureProcess
+
+from mcr.misc.math import isCollinear
+from mcr.misc.cameras import estimateFundMatrix_8norm, decomposeEssentialMat, projectionPoints
+from mcr.misc.markers import orderCenterCoord, occlusion, processCentroids
+from mcr.misc.plot import plotArena
 
 class CEC(CaptureProcess):
     # Collect points from clients, order and trigger interpolation for Camera Extrinsics Calibration
@@ -116,6 +117,19 @@ class CEC(CaptureProcess):
             self.server_socket.close()
             destroyAllWindows()
 
+            # Save Camera Extrinsics Calibration (CEC) Data
+            if self.save: 
+                now = datetime.now()
+                ymd, HMS = now.strftime('%y-%m-%d'), now.strftime('%H-%M-%S')
+                path = 'debug/dataSaves/' + ymd + '/'
+
+                # Check whether directory already exists
+                if not os.path.exists(path):
+                    os.mkdir(path)
+                    print(f'Folder {path} created!')
+        
+                np.savetxt(path + 'CEC-' + HMS + '.csv', np.array(dfSave), delimiter=',')
+            
             # Get last interval
             for idx in range(self.cameras):
                 if not len(dfOrig[idx]): continue
@@ -127,19 +141,6 @@ class CEC(CaptureProcess):
             # Print results
             print('[RESULTS] server results are')
             for i in range(self.cameras): print('  >> camera '+str(i)+': '+str(len(dfOrig[i]))+' valid images, address '+str(self.ipList[i])+', missed '+str(int(missed[i]))+' images')
-            
-            # Save Camera Extrinsics Calibration (CEC) Data
-            if self.save: 
-                now = datetime.now()
-                DMY, HMS = now.strftime('%d-%m-%y'), now.strftime('%H-%M-%S')
-                path = './dataSaves/' + DMY + '/'
-
-                # Check whether directory already exists
-                if not os.path.exists(path):
-                    os.mkdir(path)
-                    print('Folder %s created!' % path)
-        
-                np.savetxt(path + 'CEC-' + HMS + '.csv', np.array(dfSave), delimiter=',')
             
             # Get pose between each pair
             for cam in range(self.cameras-1):
@@ -269,10 +270,10 @@ class CEC(CaptureProcess):
                 points3D_perPair.append(points3d)
             
             # Saving csv
-            np.savetxt('data/R.csv', np.ravel(rotation), delimiter=',')
-            np.savetxt('data/t.csv', np.ravel(translation), delimiter=',')
-            np.savetxt('data/lamb.csv', np.ravel(scale), delimiter=',')
-            np.savetxt('data/F.csv', np.ravel(FMatrix), delimiter=',')
+            np.savetxt('mcr/capture/data/R.csv', np.ravel(rotation), delimiter=',')
+            np.savetxt('mcr/capture/data/t.csv', np.ravel(translation), delimiter=',')
+            np.savetxt('mcr/capture/data/lamb.csv', np.ravel(scale), delimiter=',')
+            np.savetxt('mcr/capture/data/F.csv', np.ravel(FMatrix), delimiter=',')
             
             # Initializing arrays
             allPoints3d,projMat = [],[]           
@@ -303,7 +304,7 @@ class CEC(CaptureProcess):
                         allPoints3d = np.hstack((allPoints3d,points3d.copy()))
 
             # Saving projection matrices
-            np.savetxt('data/projMat.csv', np.array(projMat).ravel(), delimiter=',')
+            np.savetxt('mcr/capture/data/projMat.csv', np.array(projMat).ravel(), delimiter=',')
 
             # Prepare camera data
             cameraData = {'projectionMatrices': projMat}

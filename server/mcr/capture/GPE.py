@@ -1,16 +1,17 @@
 # IMPORTS >>> DO NOT CHANGE <<<
 import warnings
 warnings.filterwarnings('ignore')
-import click, os
+import os
 from datetime import datetime
 import numpy as np
 from cv2 import destroyAllWindows, triangulatePoints
 
-from mcr.CaptureProcess import CaptureProcess
-from mcr.math import findPlane
-from mcr.cameras import projectionPoints
-from mcr.markers import processCentroids, getOrderPerEpiline
-from mcr.plot import plotArena
+from mcr.capture.CaptureProcess import CaptureProcess
+
+from mcr.misc.math import findPlane
+from mcr.misc.cameras import projectionPoints
+from mcr.misc.markers import processCentroids, getOrderPerEpiline
+from mcr.misc.plot import plotArena
 
 class GPE(CaptureProcess):
     # Collect points from clients, order and trigger interpolation
@@ -59,21 +60,21 @@ class GPE(CaptureProcess):
             # Save Ground Plane Estimation (GPE) Data
             if self.save: 
                 now = datetime.now()
-                DMY, HMS = now.strftime('%d-%m-%y'), now.strftime('%H-%M-%S')
-                path = './dataSaves/' + DMY + '/'
+                ymd, HMS = now.strftime('%y-%m-%d'), now.strftime('%H-%M-%S')
+                path = 'debug/dataSaves/' + ymd + '/'
 
                 # Check whether directory already exists
                 if not os.path.exists(path):
                     os.mkdir(path)
-                    print('Folder %s created!' % path)
+                    print(f'Folder {path} created!')
 
                 np.savetxt(path + 'GPE-' + HMS + '.csv', np.array(dfSave), delimiter=',')
 
             # Import R,t and lambda
-            rotation = np.genfromtxt('data/R.csv', delimiter=',').reshape(-1,3,3)
-            translation = np.genfromtxt('data/t.csv', delimiter=',').reshape(-1,1,3)
-            projMat = np.genfromtxt('data/projMat.csv', delimiter=',').reshape(-1,4,4)
-            scale,FMatrix = np.genfromtxt('data/lamb.csv', delimiter=','), np.genfromtxt('data/F.csv', delimiter=',').reshape(-1,3,3)
+            rotation = np.genfromtxt('mcr/capture/data/R.csv', delimiter=',').reshape(-1,3,3)
+            translation = np.genfromtxt('mcr/capture/data/t.csv', delimiter=',').reshape(-1,1,3)
+            projMat = np.genfromtxt('mcr/capture/data/projMat.csv', delimiter=',').reshape(-1,4,4)
+            scale,FMatrix = np.genfromtxt('mcr/capture/data/lamb.csv', delimiter=','), np.genfromtxt('mcr/capture/data/F.csv', delimiter=',').reshape(-1,3,3)
             
             # Order centroids
             for j in range(self.cameras-1):
@@ -153,5 +154,5 @@ class GPE(CaptureProcess):
                       groundData=groundData)
 
             # Save data
-            np.savetxt('data/P_plane.csv', np.array(P_plane), delimiter=',')
-            np.savetxt('data/groundData.csv', np.array([d,b,h]), delimiter=',')
+            np.savetxt('mcr/capture/data/P_plane.csv', np.array(P_plane), delimiter=',')
+            np.savetxt('mcr/capture/data/groundData.csv', np.array([d,b,h]), delimiter=',')

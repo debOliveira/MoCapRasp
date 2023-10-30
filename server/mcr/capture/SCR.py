@@ -1,17 +1,18 @@
 # IMPORTS >>> DO NOT CHANGE <<<
 import warnings
 warnings.filterwarnings('ignore')
-import click, os, math
+import os, math
 from datetime import datetime
 import numpy as np
 from scipy.interpolate import CubicSpline
 from cv2 import destroyAllWindows, triangulatePoints
 
-from mcr.CaptureProcess import CaptureProcess
-from mcr.math import interpolate
-from mcr.cameras import projectionPoints, getOtherValidIdx
-from mcr.markers import occlusion, processCentroids, getOrderPerEpiline, createNeedsOrder, activateNeedsOrder, getTheClosest, getOrderPerEpiline, popNeedsOrder
-from mcr.plot import plotArena
+from mcr.capture.CaptureProcess import CaptureProcess
+
+from mcr.misc.math import interpolate
+from mcr.misc.cameras import projectionPoints, getOtherValidIdx
+from mcr.misc.markers import occlusion, processCentroids, getOrderPerEpiline, createNeedsOrder, activateNeedsOrder, getTheClosest, getOrderPerEpiline, popNeedsOrder
+from mcr.misc.plot import plotArena
 
 class SCR(CaptureProcess):
     # Collect points from clients, order and trigger interpolation
@@ -46,12 +47,12 @@ class SCR(CaptureProcess):
         dfTriang[:,-1] = np.arange(0,self.record,self.step) # Last column is filled with the PTSs
 
         # Import R,T and lambda
-        rotation = np.genfromtxt('data/R.csv', delimiter=',').reshape(-1,3,3)
-        translation = np.genfromtxt('data/t.csv', delimiter=',').reshape(-1,1,3)
-        projMat = np.genfromtxt('data/projMat.csv', delimiter=',').reshape(-1,4,4)
-        scale,FMatrix = np.genfromtxt('data/lamb.csv', delimiter=','), np.genfromtxt('data/F.csv', delimiter=',').reshape(-1,3,3)
-        P_plane = np.genfromtxt('data/P_plane.csv', delimiter=',').reshape(-1,4)
-        [d,b,h] = np.genfromtxt('data/groundData.csv', delimiter=',').reshape(3)
+        rotation = np.genfromtxt('mcr/capture/data/R.csv', delimiter=',').reshape(-1,3,3)
+        translation = np.genfromtxt('mcr/capture/data/t.csv', delimiter=',').reshape(-1,1,3)
+        projMat = np.genfromtxt('mcr/capture/data/projMat.csv', delimiter=',').reshape(-1,4,4)
+        scale,FMatrix = np.genfromtxt('mcr/capture/data/lamb.csv', delimiter=','), np.genfromtxt('mcr/capture/data/F.csv', delimiter=',').reshape(-1,3,3)
+        P_plane = np.genfromtxt('mcr/capture/data/P_plane.csv', delimiter=',').reshape(-1,4)
+        [d,b,h] = np.genfromtxt('mcr/capture/data/groundData.csv', delimiter=',').reshape(3)
 
         # Capture loop
         try:
@@ -243,13 +244,13 @@ class SCR(CaptureProcess):
             # Save Standard Capture Routine (SCR) Data
             if self.save: 
                 now = datetime.now()
-                DMY, HMS = now.strftime('%d-%m-%y'), now.strftime('%H-%M-%S')
-                path = './dataSaves/' + DMY + '/'
+                ymd, HMS = now.strftime('%y-%m-%d'), now.strftime('%H-%M-%S')
+                path = 'debug/dataSaves/' + ymd + '/'
 
                 # Check whether directory already exists
                 if not os.path.exists(path):
                     os.mkdir(path)
-                    print('Folder %s created!' % path)
+                    print(f'Folder {path} created!')
         
                 np.savetxt(path + 'SCR-' + HMS + '.csv', np.array(dfSave), delimiter=',')
             

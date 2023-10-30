@@ -2,8 +2,8 @@ import numpy as np
 from itertools import permutations,combinations
 from scipy.spatial.distance import pdist
 
-from mcr.math import reshapeCoord, getSignal, swapElements, getDistance2Line
-from mcr.cameras import undistortFisheye, getEpilineCoef
+from mcr.misc.math import reshapeCoord, getSignal, swapElements, getDistance2Line
+from mcr.misc.cameras import undistortFisheye, getEpilineCoef
 
 def processCentroids(coord,a0,b0,cameraMatrix,distCoef):  
     undCoord = np.copy(coord)
