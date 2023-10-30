@@ -16,15 +16,14 @@ This repository stores an **open optical tracking/motion capture system using pa
 
 - Two (*minimum*) Raspberry 3b or above
 - Two (*minimum*) NoIR cameras 
-    * **V2 cameras are preferable** (> 90FPS)
-    * V3 cameras are not compatible with `picamera`; follow [#16](https://github.com/debOliveira/MoCapRasp/issues/16)
+    * **this code uses V2 `picamera` module** (> 90FPS)
+    * For V3 modules, use [@adthoms fork](https://github.com/adthoms/MoCapRasp/tree/main)
 - Ethernet cables
 - Tripods and [gymbals](https://www.amazon.com.br/gp/product/B099HPMZK1/ref=ppx_yo_dt_b_asin_title_o02_s01?ie=UTF8&psc=1))
 - Dissasembled PC coolers (there will be frequency capping if no ventilation)
 - IR LED [rings](https://produto.mercadolivre.com.br/MLB-2096109150-led-infravermelho-cameras-seguranca-com-sensor-kit-4-placa-_JM) or [reflectors](https://produto.mercadolivre.com.br/MLB-705743885-refletor-72-leds-infravermelho-para-camera-de-seguranca-_JM#position=18&search_layout=stack&type=item&tracking_id=f82f63b5-6055-4f00-a978-0f2bfc703d91) (rings are easier to align with the camera axis)
 - IR low-pass filters (floppy disks or [glass](https://pt.aliexpress.com/item/1005003709944263.html?spm=a2g0o.order_list.0.0.1856caa4oP6TAy&gatewayAdapt=glo2bra))
 - NPN FET, optocoupler, and 3x 1kΩ resistors for LED turn on/off circuit 
-    * You can also weld the power directly and manually plug it on or off
 - Polystyrene spheres 
 - [Reflective adehesive](https://dmrefletivos.com.br/sinalizacao-viaria/grau-comercial/)
   
