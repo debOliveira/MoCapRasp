@@ -16,11 +16,14 @@
 
 ## 🏗️ Requirements
 
-- Install requirements
+>  **FIRST-TIME USERS**: follow these steps to setup the application
+
+It's highly recommended to create a Python Virtual Enviroment for `requirements.txt` installation.
+
+- Run the following
 ``` shell 
 sudo apt-get install ptpd
 sudo apt-get install -y libatlas-base-dev libhdf5-dev libhdf5-serial-dev libjasper-dev
-pip3 install -r requirements.txt
 pip3 install --editable .
 ```
 
