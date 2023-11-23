@@ -2,6 +2,7 @@ import numpy as np
 import math
 from sklearn import linear_model
 from scipy.interpolate import CubicSpline
+from scipy.spatial.transform import Rotation
 
 # VECTOR ALGEBRA
 
