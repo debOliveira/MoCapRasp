@@ -31,6 +31,6 @@ This repository stores an **open optical tracking/motion capture system using pa
 
 Please follow each folder `README.md` guide file. 
     
-- [`./calib`](/calib/) for intrinsics calibration 
-- [`./server`](/server/) for the server
-- [`./client`](/client/) for the client]
+- [`/calib/`](/calib/) for intrinsics calibration scripts 
+- [`/server/`](/server/) for the server scritps
+- [`/client/`](/client/) for the client scripts

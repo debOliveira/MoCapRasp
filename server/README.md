@@ -2,58 +2,53 @@
 
 ## 📂 Organization
 
-    ├── requirements.txt    # python requirements
+    ├── requirements.txt    # Python requirements
     |
-    ├── mcr                 # MoCapRasp module package 
+    ├── setup.py            # Setup script for enviroment
     |
-    ├── connect.sh          # start the ptpd server
+    ├── /mcr/               # MoCap Rasp Module Package 
     |
-    ├── calib.py            # runs the real-time extrinsics calibration
-    ├── ground.py           # runs the real-time ground calibration
-    ├── capture.py          # runs the real-time capture   
+    ├── connect.sh          # Start the PTPd server
     |
-    └── debugOnline.ipynb   # .ipynb to debug the .csv offline
-
-
+    ├── mocaprasp.py        # CLI Application that runs the real-time Capture Processes
+    |
+    └── /debug/             # Debug folder with Jupyter Notebook to debug the .csv offline
 
 ## 🏗️ Requirements
 
-- Install requirements
+>  **FIRST-TIME USERS**: follow these steps to setup the application
+
+It's highly recommended to create a Python Virtual Enviroment for `requirements.txt` installation.
+
+- Run the following
 ``` shell 
 sudo apt-get install ptpd
 sudo apt-get install -y libatlas-base-dev libhdf5-dev libhdf5-serial-dev libjasper-dev
-pip3 install -r requirements.txt
+pip3 install --editable .
 ```
 
 - Start the `ptpd` server
 ``` bash
 source connect.sh
 ```
-- Copy the matrices of the intrinsics calibration done in [`./calib`](/calib/) to `mcr/constants.py` to the array `cameraMat` and `distCoef`.
+- Copy the matrices of the intrinsics calibration done in [`../calib/`](/calib/) to `./mcr/misc/constants.py` to the array `cameraMat` and `distCoef`.
 
-- Make sure mDNS is activated in your network and change the hostname of each Raspberry at the line 
-```python
-ip = (socket.gethostbyname('cam1.local')+','+socket.gethostbyname('cam2.local')+','+
-      socket.gethostbyname('cam3.local')+','+socket.gethostbyname('cam4.local'))
-```
-at `calib.py`, `ground.py` and `capture.py`. Ensure that the sequence is from camera 1 to N. 
+- Make sure mDNS is activated in your network and change the hostname of each Raspberry at the line to 'camX', where X is a number representing the camera ID. Do not use the same ID for different clients.
 
 ## ⚔️ Usage
 
->  **FIRST-TIME USERS**: understand `debugOnline.ipynb` before changing the real-time python scripts.
+>  **FIRST-TIME USERS**: understand `../debug/debugOffline.ipynb` before changing the real-time python scripts.
 
-You can find the arguments of each script running 
+You can find the commands for the system at:
 ``` python
-python3 calib.py --help
-python3 ground.py --help
-python3 capture.py --help
+mocaprasp --help
 ```
 
-Per default: 
+You can find the options of each Capture Process at:
 ``` python
-python3 calib.py -trig 20 -rec 120 -save 
-python3 ground.py -trig 2 -rec 10 -save 
-python3 capture.py -marker 4 -rec 60 -save -trig 5  
+mocaprasp cec --help
+mocaprasp gpe --help
+mocaprasp scr --help
 ```
 
 ## 🖼️ Example pics
