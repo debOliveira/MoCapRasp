@@ -44,7 +44,7 @@ class GPE(CaptureProcess):
                     if not len(coord): continue
 
                     # Undistort points
-                    undCoord = processCentroids(coord,a,b,self.cameraMat[idx],self.distCoef[idx])
+                    undCoord = processCentroids(coord,a,b,self.intrinsicsMatrix[idx],self.distortionCoefficients[idx])
                     if undCoord.shape[0]==3:
                         if self.save: dfSave.append(np.concatenate((undCoord.reshape(undCoord.shape[0]*undCoord.shape[1]),[timeNow,imgNumber,idx])))
                         if not counter[idx]: dfOrig[idx] = np.hstack((undCoord.reshape(6),timeNow))
@@ -93,7 +93,7 @@ class GPE(CaptureProcess):
             # Triangulate ordered centroids from the first pair
             pts1,pts2 = np.copy(dfOrig[0][0:6].reshape(-1,2)),np.copy(dfOrig[1][0:6].reshape(-1,2))
             R,t,lamb = rotation[1],translation[1].reshape(-1,3),scale[1]
-            P1,P2 = np.hstack((self.cameraMat[0], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[1], np.hstack((R, t.T)))
+            P1,P2 = np.hstack((self.intrinsicsMatrix[0], [[0.], [0.], [0.]])),np.matmul(self.intrinsicsMatrix[1], np.hstack((R, t.T)))
             projPt1,projPt2 = projectionPoints(np.array(pts1)),projectionPoints(np.array(pts2))
             points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
             points3d = (points4d[:3, :]/points4d[3, :]).T

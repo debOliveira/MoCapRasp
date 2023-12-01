@@ -4,7 +4,7 @@ warnings.filterwarnings('ignore')
 import socket, time
 import numpy as np
 
-from mcr.misc.constants import cameraMat, distCoef
+from mcr.misc.constants import intrinsicsMatrix, distortionCoefficients
 
 class CaptureProcess(object):
     def __init__(self,cameraids,markers,trigger,record,fps,verbose,save):
@@ -27,8 +27,8 @@ class CaptureProcess(object):
             print('[ERROR] Number of cameras do not match the number of IPs found')
             exit()
 
-        self.cameraMat = np.copy(cameraMat)
-        self.distCoef = np.copy(distCoef)
+        self.intrinsicsMatrix = np.copy(intrinsicsMatrix)
+        self.distortionCoefficients = np.copy(distortionCoefficients)
 
         # Do not change below this line, socket variables
         self.nImages = int(self.record / self.step)
@@ -63,9 +63,9 @@ class CaptureProcess(object):
             print('[INFO] Camera '+str(idx)+' connected at '+str(address[0]))
 
             # Redo intrinsics
-            ret,newCamMatrix=self.intrinsics(self.cameraMat[idx],self.imageSize[idx][0],self.imageSize[idx][1],self.imageSize[idx][2])
+            ret,newCamMatrix=self.intrinsics(self.intrinsicsMatrix[idx],self.imageSize[idx][0],self.imageSize[idx][1],self.imageSize[idx][2])
             if ret: 
-                self.cameraMat[idx]=np.copy(newCamMatrix)
+                self.intrinsicsMatrix[idx]=np.copy(newCamMatrix)
             else: 
                 exit()
 

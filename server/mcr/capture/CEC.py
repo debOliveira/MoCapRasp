@@ -61,7 +61,7 @@ class CEC(CaptureProcess):
                         a,b,time,imgNumber = message[-4],message[-3],message[-2],int(message[-1]) 
 
                         # Undistort points
-                        undCoord = processCentroids(coord,a,b,self.cameraMat[idx],self.distCoef[idx])
+                        undCoord = processCentroids(coord,a,b,self.intrinsicsMatrix[idx],self.distortionCoefficients[idx])
                         
                         if self.save: dfSave.append(np.concatenate((undCoord.reshape(6),[time,imgNumber,idx])))
 
@@ -175,10 +175,10 @@ class CEC(CaptureProcess):
                 print('[INFO] Computing fundamental and essential matrix between cameras '+str(cam)+'-'+str(cam+1))
                 try: 
                     F,_ = estimateFundMatrix_8norm(np.array(centroids1),np.array(centroids2),verbose=False)
-                    E = np.matmul(self.cameraMat[cam+1].T, np.matmul(F, self.cameraMat[cam]))
+                    E = np.matmul(self.intrinsicsMatrix[cam+1].T, np.matmul(F, self.intrinsicsMatrix[cam]))
 
                     # Decompose to rotation and translation between cameras
-                    R, t = decomposeEssentialMat(E, self.cameraMat[cam], self.cameraMat[cam+1], np.array(centroids1), np.array(centroids2))
+                    R, t = decomposeEssentialMat(E, self.intrinsicsMatrix[cam], self.intrinsicsMatrix[cam+1], np.array(centroids1), np.array(centroids2))
                     if np.any(np.isnan(R)): 
                         print('[ERROR] no valid rotation matrix')
                         return
@@ -191,7 +191,7 @@ class CEC(CaptureProcess):
                     return
                 
                 # Create projection matrices and triangulate to compute scale
-                P1,P2 = np.hstack((self.cameraMat[cam], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[cam+1], np.hstack((R, t.T)))
+                P1,P2 = np.hstack((self.intrinsicsMatrix[cam], [[0.], [0.], [0.]])),np.matmul(self.intrinsicsMatrix[cam+1], np.hstack((R, t.T)))
                 projPt1,projPt2 = projectionPoints(np.array(centroids1)),projectionPoints(np.array(centroids2))
                 points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
                 points3d = (points4d[:3, :]/points4d[3, :]).T
@@ -221,10 +221,10 @@ class CEC(CaptureProcess):
                 
                 # Get fundamental and essential matrices
                 F,_ = estimateFundMatrix_8norm(np.copy(centroids1),np.copy(centroids2))
-                E = np.matmul(self.cameraMat[cam+1].T, np.matmul(F, self.cameraMat[cam]))
+                E = np.matmul(self.intrinsicsMatrix[cam+1].T, np.matmul(F, self.intrinsicsMatrix[cam]))
                 
                 # Decompose to rotation and translation between cameras
-                R, t = decomposeEssentialMat(E, self.cameraMat[cam], self.cameraMat[cam+1], np.copy(centroids1), np.copy(centroids2))
+                R, t = decomposeEssentialMat(E, self.intrinsicsMatrix[cam], self.intrinsicsMatrix[cam+1], np.copy(centroids1), np.copy(centroids2))
                 if np.any(np.isnan(R)): 
                     print('[ERROR] no valid rotation matrix')
                     return
@@ -233,7 +233,7 @@ class CEC(CaptureProcess):
                         print('\nRot. Mat.\n', R.round(4))
                         print('\nTrans. Mat.\n', t.round(4))
 
-                P1,P2 = np.hstack((self.cameraMat[cam], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[cam+1], np.hstack((R, t.T)))
+                P1,P2 = np.hstack((self.intrinsicsMatrix[cam], [[0.], [0.], [0.]])),np.matmul(self.intrinsicsMatrix[cam+1], np.hstack((R, t.T)))
                 projPt1,projPt2 = projectionPoints(np.copy(centroids1)),projectionPoints(np.copy(centroids2))
                 points4d = triangulatePoints(P1.astype(float),P2.astype(float),projPt1.astype(float),projPt2.astype(float))
                 points3d = (points4d[:3, :]/points4d[3, :]).T

@@ -84,7 +84,7 @@ class SCR(CaptureProcess):
                         a,b,timeNow,imgNumber = message[-4],message[-3],message[-2],int(message[-1])
 
                         # Undistort points
-                        undCoord = processCentroids(coord,a,b,self.cameraMat[idx],self.distCoef[idx])
+                        undCoord = processCentroids(coord,a,b,self.intrinsicsMatrix[idx],self.distortionCoefficients[idx])
                         if self.save: dfSave.append(np.concatenate((undCoord.reshape(2*self.markers),[timeNow,imgNumber,idx]))) 
 
                         # Time missmatch discarding
@@ -212,7 +212,7 @@ class SCR(CaptureProcess):
                                 # Getting the data
                                 pts1,pts2 = dfInterp[k,minIdx*(2*self.markers):(minIdx+1)*(2*self.markers)].reshape(-1,2),dfInterp[k,maxIdx*(2*self.markers):(maxIdx+1)*(2*self.markers)].reshape(-1,2) 
                                 R,t,lamb = rotation[maxIdx],translation[maxIdx].reshape(-1,3),scale[maxIdx]
-                                P1,P2 = np.hstack((self.cameraMat[minIdx], [[0.], [0.], [0.]])),np.matmul(self.cameraMat[maxIdx], np.hstack((R, t.T)))
+                                P1,P2 = np.hstack((self.intrinsicsMatrix[minIdx], [[0.], [0.], [0.]])),np.matmul(self.intrinsicsMatrix[maxIdx], np.hstack((R, t.T)))
                                 projPt1,projPt2 = projectionPoints(np.array(pts1)),projectionPoints(np.array(pts2))
                                 
                                 # Triangulate
