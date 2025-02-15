@@ -42,17 +42,17 @@ GPIO.output(led,1)
 
 # server parameters
 print('[INFO] connecting to server')
-hostnamePC = socket.gethostbyname('debora-pc.local')
-UDPSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-UDPSocket.sendto(str(str(w)+','+str(h)+','+str(md)).encode(),(hostnamePC, 8888))
-message,_ = UDPSocket.recvfrom(1024)
-start = float(message.split()[0])
-max_frames = int(message.split()[1])*fps
-print('[INFO] waiting trigger')
-now = time.time()
-while now < start: now = time.time()
-print('[INFO] delay in sec: ',now-start)
-#max_frames=20
+# hostnamePC = socket.gethostbyname('nuc.local')
+# UDPSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+# UDPSocket.sendto(str(str(w)+','+str(h)+','+str(md)).encode(),(hostnamePC, 8888))
+# message,_ = UDPSocket.recvfrom(1024)
+# start = float(message.split()[0])
+# max_frames = int(message.split()[1])*fps
+# print('[INFO] waiting trigger')
+# now = time.time()
+# while now < start: now = time.time()
+# print('[INFO] delay in sec: ',now-start)
+max_frames=20
 
 # running command
 cameraProcess = sp.Popen(videoCmd, stdout=sp.PIPE) # start the camera
@@ -77,7 +77,7 @@ while True:
 	# count frame
 	N_frames += 1
 	if N_frames == max_frames: break
-	
+
 # closing buffer
 end = time.time()-start
 cameraProcess.terminate() 
