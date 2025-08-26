@@ -2,10 +2,10 @@
 <img src="https://user-images.githubusercontent.com/48807586/177659981-d0c4ffe2-3738-45ec-886e-c289925b0546.png" height="200" align="center">
 </p>
 
-![Status](https://img.shields.io/static/v1?style=flat&logo=github&label=status&message=active&color=blue) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)  
-
-
 This repository stores an **open optical tracking/motion capture system using passive reflective markers and Raspberry Pi**. The system has a 1cm accuracy when using 4 cameras, but the number can be expanded to improve cover. 
+
+> [!IMPORTANT]  
+> **This project is now being updated and managed by [@IEEE-RAS-UFCG](https://github.com/ieee-ras-ufcg) group**
 
 ## 🔖 Docs
 
